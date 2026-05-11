@@ -1,0 +1,86 @@
+name: Build Flash Boot Tool
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  build:
+
+    runs-on: windows-latest
+
+    steps:
+
+      # =========================
+      # 📥 Checkout
+      # =========================
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # =========================
+      # 🐍 Python
+      # =========================
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      # =========================
+      # 📦 Install Backend
+      # =========================
+      - name: Install backend deps
+        run: |
+          cd backend
+          pip install -r requirements.txt
+          pip install pyinstaller
+
+      # =========================
+      # 🔥 Build backend.exe
+      # =========================
+      - name: Build backend exe
+        run: |
+          cd backend
+          pyinstaller --onefile main.py
+
+      # =========================
+      # 🟢 Node.js
+      # =========================
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      # =========================
+      # 📦 Install frontend
+      # =========================
+      - name: Install frontend deps
+        run: |
+          cd frontend
+          npm install
+
+      # =========================
+      # 🏗 Build React
+      # =========================
+      - name: Build React
+        run: |
+          cd frontend
+          npm run build
+
+      # =========================
+      # 📦 Build Electron
+      # =========================
+      - name: Build Electron
+        run: |
+          cd frontend
+          npm run dist
+
+      # =========================
+      # ⬆ Upload artifact
+      # =========================
+      - name: Upload Build
+        uses: actions/upload-artifact@v4
+        with:
+          name: FlashBootTool
+          path: |
+            frontend/dist/*.exe
