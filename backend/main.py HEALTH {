@@ -1,0 +1,179 @@
+from fastapi import FastAPI
+from fastapi.responses import StreamingResponse
+from pydantic import BaseModel
+
+import os
+import json
+import time
+import hashlib
+import subprocess
+import traceback
+import platform
+
+app = FastAPI(title="Flash Boot Tool PRO")
+
+# =========================
+# p# =========================
+class FlashRequest(BaseModel):
+    iso: str
+    device: str
+
+
+# =========================
+# b$o8stem = platform.system()
+
+    try:
+
+        # =========================
+        # p        # =========================
+        if system == "Windows":
+
+            cmd = [
+                "powershell",
+                "-Command",
+                """
+Get-CimInstance Win32_DiskDrive |
+Where-Object {$_.InterfaceType -eq 'USB'} |
+Select DeviceID,Model,Size |
+ConvertTo-Json
+"""
+            ]
+
+            out = subprocess.check_output(cmd)
+            data = json.loads(out)
+
+            if isinstance(data, dict):
+                data = [data]
+
+            result = []
+
+            for d in data:
+
+                size = int(d["Size"]) / (1024**3)
+
+                result.append({
+                    "path": d["DeviceID"],
+                    "model": d["Model"],
+                    "size": f"{round(size,1)} GB"
+                })
+
+            return result
+
+        # =========================
+        # p        # =========================
+        elif system == "Linux":
+
+            out = subprocess.check_output([
+                "lsblk",
+                "-J",
+                "-o",
+                "NAME,SIZE,MODEL,TRAN"
+            ])
+
+            data = json.loads(out)
+
+            result = []
+
+            for d in data["blockdevices"]:
+
+                if d.get("tran") != "usb":
+                    continue
+
+                result.append({
+                    "path": f"/dev/{d['name']}",
+                    "model": d.get("model", "USB"),
+                    "size": d.get("size", "?")
+                })
+
+            return result
+
+        # =========================
+        # p
+ MACOS
+        # =========================
+        elif system == "Darwin":
+
+            return []
+
+    except Exception as e:
+        traceback.print_exc()
+        return {"error": str(e)}
+
+
+# =========================
+# p DETECT BOOT MODE
+# =========================
+def detect_boot_mode(path):
+
+    try:
+        with open(path, "rb") as f:
+            data = f.read(1024 * 1024)
+
+        if b"EFI" in data:
+            return "UEFI"
+
+        return "BIOS"
+
+    except:
+        return "UNKNOWN"
+
+
+# =========================
+# p# =========================
+def sha256(path):
+
+    h = hashlib.sha256()
+
+    with open(path, "rb") as f:
+        for chunk in iter(lambda: f.read(4 * 1024 * 1024), b""):
+            h.update(chunk)
+
+    return h.hexdigest()
+
+
+# =========================
+# p# =========================
+def flash_iso(iso_path, device_path):
+
+    CHUNK = 4 * 1024 * 1024
+
+    total = os.path.getsize(iso_path)
+    written = 0
+
+    start = time.time()
+
+    with open(iso_path, "rb") as src, open(device_path, "wb") as dst:
+
+        while True:
+
+            chunk = src.read(CHUNK)
+
+            if not chunk:
+                break
+
+            dst.write(chunk)
+            dst.flush()
+
+            written += len(chunk)
+
+            elapsed = time.time() - start
+
+            speed = written / elapsed if elapsed > 0 else 0
+
+            eta = (total - written) / speed if speed > 0 else 0
+
+            yield {
+                "progress": int((written / total) * 100),
+                "speed": round(speed / 1024 / 1024, 2),
+                "eta": int(eta),
+                "written_gb": round(written / 1024**3, 2),
+                "total_gb": round(total / 1024**3, 2)
+            }
+
+    yield {
+        "progress": 100,
+        "status": "done"
+    }
+
+
+#
