@@ -41,7 +41,7 @@ jobs:
       - name: Build backend exe
         run: |
           cd backend
-          pyinstaller --onefile main.py
+          pyinstaller --onefile --name backend main.py
 
       # =========================
       # 🟢 Node.js
