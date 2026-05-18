@@ -78,9 +78,9 @@ jobs:
       # =========================
       # ⬆ Upload artifact
       # =========================
-      - name: Upload Build
+      - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: FlashBootTool
-          path: |
-            frontend/dist/*.exe
+          name: Flash-Boot-Tool
+          path: frontend/release/*.exe
+          
