@@ -29,7 +29,8 @@
     },
     "extraResources": [
       "extraResources": [
-  { "from": "../backend/dist/main.exe", "to": "backend/backend.exe" }
+  { "from": "../backend/dist/main.exe", 
+    "to": "backend/backend.exe" }
 ]
     ],
     "files": [
