@@ -28,10 +28,9 @@
       "output": "release"
     },
     "extraResources": [
-      {
-        "from": "../backend/dist/backend.exe",
-        "to": "backend/backend.exe"
-      }
+      "extraResources": [
+  { "from": "../backend/dist/main.exe", "to": "backend/backend.exe" }
+]
     ],
     "files": [
       "dist/**/*",
