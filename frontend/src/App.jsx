@@ -27,7 +27,6 @@ function App() {
     if (res.success) alert('Flash เสร็จแล้ว!')
   }
 
-  // แก้ตรงนี้
   const handleSelectIso = async () => {
     const filePath = await window.electron.selectIsoFile()
     if (filePath) {
@@ -72,5 +71,4 @@ function App() {
   )
 }
 
-export default App
-export default App;
+export default App  // เหลืออันเดียวตรงนี้
