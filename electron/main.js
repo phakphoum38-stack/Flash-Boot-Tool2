@@ -1,12 +1,19 @@
-const { app, BrowserWindow } = require('electron')
+const { ipcMain } = require('electron');
+const { spawn } = require('child_process');
+const path = require('path');
 
-function createWindow() {
-  const win = new BrowserWindow({
-    width: 1200,
-    height: 800
-  })
+ipcMain.handle('flash-iso', async (event, isoPath, device) => {
+  const backendPath = path.join(process.resourcesPath, 'backend', 'backend.exe');
 
-  win.loadURL('http://127.0.0.1:8000')
-}
+  return new Promise((resolve) => {
+    const proc = spawn(backendPath, ['flash', isoPath, device]);
 
-app.whenReady().then(createWindow)
+    proc.stdout.on('data', (data) => {
+      event.sender.send('flash-progress', data.toString());
+    });
+
+    proc.on('close', (code) => {
+      resolve({ success: code === 0 });
+    });
+  });
+});
