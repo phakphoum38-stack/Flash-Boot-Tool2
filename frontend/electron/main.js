@@ -54,4 +54,3 @@ app.whenReady().then(() => {
 app.on("will-quit", () => {
   if (backend) backend.kill();
 });
-});
