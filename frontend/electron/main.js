@@ -32,7 +32,11 @@ function createWindow() {
       contextIsolation: true
     }
   });
+  
   win.loadFile(path.join(__dirname, "../dist/index.html"));
+  
+  // เพิ่มบรรทัดนี้เข้าไปใต้ win.loadFile
+  win.webContents.openDevTools();
 }
 
 ipcMain.handle("select-iso", async () => {
