@@ -1,26 +1,47 @@
-"build": {
-  "appId": "com.flashboot.tool",
-  "productName": "Flash Boot Tool",
-  "directories": {
-    "output": "release"
+{
+  "name": "flash-boot-tool",
+  "version": "1.0.0",
+  "description": "Flash Boot Tool",
+  "main": "electron/main.js",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "dist": "electron-builder"
   },
-  "files": [
-    "dist/**/*",
-    "electron/**/*"
-  ],
-  "extraResources": [
-    {
-      "from": "../backend/dist/",
-      "to": "backend",
-      "filter": ["**/*.exe"]
+  "dependencies": {
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0"
+  },
+  "devDependencies": {
+    "electron": "^31.0.0",
+    "electron-builder": "^24.13.3",
+    "vite": "^5.0.0"
+  },
+  "build": {
+    "appId": "com.flashboot.tool",
+    "productName": "Flash Boot Tool",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "electron/**/*"
+    ],
+    "extraResources": [
+      {
+        "from": "../backend/dist/",
+        "to": "backend",
+        "filter": ["**/*.exe"]
+      }
+    ],
+    "win": {
+      "target": "nsis",
+      "requestedExecutionLevel": "requireAdministrator"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
     }
-  ],
-  "win": {
-    "target": "nsis",
-    "requestedExecutionLevel": "requireAdministrator"
-  },
-  "nsis": {
-    "oneClick": false,
-    "allowToChangeInstallationDirectory": true
   }
 }
