@@ -2,7 +2,6 @@ name: Build Flash Boot Tool
 on:
   push:
     branches: [ main ]
-
 jobs:
   build:
     runs-on: windows-latest
@@ -27,6 +26,7 @@ jobs:
           pyinstaller --onefile --name backend main.py
 
       - name: Verify backend.exe
+        shell: cmd
         run: |
           if not exist backend\dist\backend.exe (
             echo backend.exe not found!
