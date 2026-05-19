@@ -55,13 +55,7 @@ jobs:
         run: npm run dist
 
       - name: Upload Artifact
-        uses: actions/upload-artifact@v4.6.2
+        uses: actions/upload-artifact@v4.6.2  
         with:
-          name: Flash-Boot-Tool
-          path: frontend/release/*.exe
-
-      - name: Upload Artifact
-        uses: actions/upload-artifact@v4.6.2
-        with:
-          name: Flash-Boot-Tool
+          name: Flash-Boot-Tool-${{ github.run_number }}
           path: frontend/release/*.exe
