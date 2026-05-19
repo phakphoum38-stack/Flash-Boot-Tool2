@@ -74,3 +74,10 @@ function createWindow() {
 // papp.on("will-quit", () => {
   if (backend) backend.kill();
 });
+const { dialog } = require('electron');
+ipcMain.handle('select-iso-file', async () => {
+  const { canceled, filePaths } = await dialog.showOpenDialog({
+    filters: [{ name: 'ISO', extensions: ['iso'] }]
+  });
+  return canceled? null : filePaths[0];
+});
