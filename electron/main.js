@@ -31,3 +31,8 @@ mainWindow = new BrowserWindow({
     preload: path.join(__dirname, 'preload.js')
   }
 });
+const isAdmin = require('is-admin');
+if (!isAdmin()) {
+  app.quit();
+  alert('กรุณารันโปรแกรมเป็น Administrator');
+}
