@@ -10,6 +10,7 @@
     "dist": "electron-builder"
   },
   "dependencies": {
+    "drivelist": "^11.0.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0"
   },
@@ -18,23 +19,14 @@
     "electron-builder": "^24.13.3",
     "vite": "^5.0.0",
     "@vitejs/plugin-react": "^4.3.0"
-  },  
+  },
   "build": {
     "appId": "com.flashboot.tool",
     "productName": "Flash Boot Tool",
-    "directories": {
-      "output": "release"
-    },
-    "files": [
-      "dist/**/*",
-      "electron/**/*"
-    ],
+    "directories": { "output": "release" },
+    "files": [ "dist/**/*", "electron/**/*" ],
     "extraResources": [
-      {
-        "from": "../backend/dist/",
-        "to": "backend",
-        "filter": ["**/*.exe"]
-      }
+      { "from": "../backend/dist/", "to": "backend", "filter": ["**/*.exe"] }
     ],
     "win": {
       "target": "nsis",
