@@ -9,7 +9,16 @@ ipcMain.handle('flash-iso', async (event, isoPath, device) => {
     const proc = spawn(backendPath, ['flash', isoPath, device]);
 
     proc.stdout.on('data', (data) => {
-      event.sender.send('flash-progress', data.toString());
+      try {
+        const msg = JSON.parse(data.toString());
+        if (msg.progress!== undefined) {
+          event.sender.send('flash-progress', msg.progress);
+        }
+      } catch {}
+    });
+
+    proc.stderr.on('data', (data) => {
+      event.sender.send('flash-error', data.toString());
     });
 
     proc.on('close', (code) => {
