@@ -9,12 +9,10 @@ jobs:
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v4.2.2
 
       - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
+        uses: actions/setup-python@v5.3.0
 
       - name: Install backend deps
         run: |
@@ -37,7 +35,7 @@ jobs:
           dir backend\dist
 
       - name: Setup Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v4.4.0
         with:
           node-version: "20"
 
@@ -57,7 +55,7 @@ jobs:
           npm run dist
 
       - name: Upload Artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v4.6.2
         with:
           name: Flash-Boot-Tool
           path: frontend/release/*.exe
