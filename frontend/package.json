@@ -14,11 +14,11 @@
     "react-dom": "^18.2.0"
   },
   "devDependencies": {
-  "electron": "^31.0.0",
-  "electron-builder": "^24.13.3",
-  "vite": "^5.0.0",
-  "@vitejs/plugin-react": "^4.3.0"
-}
+    "electron": "^31.0.0",
+    "electron-builder": "^24.13.3",
+    "vite": "^5.0.0",
+    "@vitejs/plugin-react": "^4.3.0"
+  },  
   "build": {
     "appId": "com.flashboot.tool",
     "productName": "Flash Boot Tool",
