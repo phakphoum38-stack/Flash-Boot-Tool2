@@ -1,7 +1,7 @@
 const { app, BrowserWindow, ipcMain, dialog } = require("electron")
 const { spawn } = require("child_process")
 const path = require("path")
-const drivelist = require("drivelist") // เพิ่มตรงนี้
+const drivelist = require("drivelist")
 
 let backend
 
@@ -41,17 +41,49 @@ ipcMain.handle("select-iso", async () => {
   return result.filePaths[0]
 })
 
-// ดึงรายชื่อ USB - เพิ่มตรงนี้
+// ดึงรายชื่อ USB
 ipcMain.handle("get-usb-devices", async () => {
   const drives = await drivelist.list()
   return drives
-   .filter(d => d.isUSB &&!d.isSystem && d.mountpoints.length > 0)
-   .map(d => ({
+  .filter(d => d.isUSB &&!d.isSystem && d.mountpoints.length > 0)
+  .map(d => ({
       path: d.device,
       name: d.description,
       size: d.size,
       mount: d.mountpoints[0]?.path || ''
     }))
+})
+
+// เพิ่มตรงนี้ - สั่ง flash
+ipcMain.handle("flash-iso", async (event, isoPath, device) => {
+  return new Promise((resolve, reject) => {
+    // เรียก backend.exe ที่รันอยู่แล้ว ส่งคำสั่งผ่าน stdin/stdout
+    // หรือถ้า backend.exe รันแบบ one-shot ให้ spawn ใหม่:
+    const backendExe = app.isPackaged
+    ? path.join(process.resourcesPath, "backend", "backend.exe")
+      : path.join(__dirname, "../../backend/dist/backend.exe")
+
+    const proc = spawn(backendExe, ["flash", isoPath, device], { windowsHide: true })
+
+    proc.stdout.on("data", (data) => {
+      const msg = data.toString().trim()
+      console.log("Backend:", msg)
+
+      // ถ้า backend ส่ง "PROGRESS:50" ออกมา
+      if (msg.startsWith("PROGRESS:")) {
+        const percent = parseInt(msg.split(":")[1])
+        event.sender.send("flash-progress", percent)
+      }
+    })
+
+    proc.stderr.on("data", (data) => {
+      event.sender.send("flash-error", data.toString())
+    })
+
+    proc.on("close", (code) => {
+      resolve({ success: code === 0 })
+    })
+  })
 })
 
 app.whenReady().then(() => {
