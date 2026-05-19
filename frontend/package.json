@@ -23,11 +23,4 @@
     "oneClick": false,
     "allowToChangeInstallationDirectory": true
   }
-    "files": [
-      "dist/**/*",
-      "electron/**/*"
-    ],
-    "win": {
-      "target": "nsis"
-    }
 }
