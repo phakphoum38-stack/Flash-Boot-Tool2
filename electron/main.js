@@ -26,3 +26,8 @@ ipcMain.handle('flash-iso', async (event, isoPath, device) => {
     });
   });
 });
+mainWindow = new BrowserWindow({
+  webPreferences: {
+    preload: path.join(__dirname, 'preload.js')
+  }
+});
