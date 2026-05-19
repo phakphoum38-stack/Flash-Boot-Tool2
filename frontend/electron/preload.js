@@ -12,4 +12,5 @@ contextBridge.exposeInMainWorld('electron', {
   removeAllListeners: (channel) => ipcRenderer.removeAllListeners(channel),
 
   selectIsoFile: () => ipcRenderer.invoke('select-iso')
+  getUsbDevices: () => ipcRenderer.invoke('get-usb-devices')
 })
