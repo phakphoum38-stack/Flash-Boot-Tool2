@@ -1,36 +1,29 @@
-{
-  "name": "flash-boot-ui",
-  "version": "1.0.0",
-  "description": "Flash Boot Tool UI",
-  "author": "phakphoum38-stack",
-  "main": "electron/main.js",
-  "type": "module",
-  "scripts": {
-    "dev": "vite",
-    "build": "vite build",
-    "start": "electron .",
-    "dist": "electron-builder --win --x64"
+"build": {
+  "appId": "com.flashboot.tool",
+  "productName": "Flash Boot Tool",
+  "directories": {
+    "output": "release"
   },
-  "dependencies": {
-    "react": "^18.2.0",
-    "react-dom": "^18.2.0"
+  "files": [
+    "dist/**/*",
+    "electron/**/*"
+  ],
+  "extraResources": [
+    {
+      "from": "../backend/dist/",
+      "to": "backend",
+      "filter": ["**/*.exe"]
+    }
+  ],
+  "win": {
+    "target": "nsis",
+    "requestedExecutionLevel": "requireAdministrator"
   },
-  "devDependencies": {
-    "vite": "^5.0.0",
-    "@vitejs/plugin-react": "^4.2.1",
-    "electron": "^28.3.3",
-    "electron-builder": "^24.13.3"
-  },
-  "build": {
-    "appId": "com.flashboot.tool",
-    "productName": "Flash Boot Tool",
-    "directories": {
-      "output": "release"
-    },
-   "extraResources": [
-  { "from": "../backend/dist/main.exe", 
-    "to": "backend/backend.exe" }
-    ],
+  "nsis": {
+    "oneClick": false,
+    "allowToChangeInstallationDirectory": true
+  }
+}
     "files": [
       "dist/**/*",
       "electron/**/*"
