@@ -45,8 +45,8 @@ ipcMain.handle("select-iso", async () => {
 ipcMain.handle("get-usb-devices", async () => {
   const drives = await drivelist.list()
   return drives
-  .filter(d => d.isUSB &&!d.isSystem && d.mountpoints.length > 0)
-  .map(d => ({
+ .filter(d => d.isUSB &&!d.isSystem)
+ .map(d => ({
       path: d.device,
       name: d.description,
       size: d.size,
@@ -54,22 +54,25 @@ ipcMain.handle("get-usb-devices", async () => {
     }))
 })
 
-// เพิ่มตรงนี้ - สั่ง flash
+// สั่ง flash พร้อม debug log
 ipcMain.handle("flash-iso", async (event, isoPath, device) => {
-  return new Promise((resolve, reject) => {
-    // เรียก backend.exe ที่รันอยู่แล้ว ส่งคำสั่งผ่าน stdin/stdout
-    // หรือถ้า backend.exe รันแบบ one-shot ให้ spawn ใหม่:
+  console.log("=== Flash Start ===")
+  console.log("ISO Path:", isoPath)
+  console.log("Device:", device)
+
+  return new Promise((resolve) => {
     const backendExe = app.isPackaged
-    ? path.join(process.resourcesPath, "backend", "backend.exe")
+   ? path.join(process.resourcesPath, "backend", "backend.exe")
       : path.join(__dirname, "../../backend/dist/backend.exe")
+
+    console.log("Backend Exe Path:", backendExe)
 
     const proc = spawn(backendExe, ["flash", isoPath, device], { windowsHide: true })
 
     proc.stdout.on("data", (data) => {
       const msg = data.toString().trim()
-      console.log("Backend:", msg)
+      console.log("Backend OUT:", msg)
 
-      // ถ้า backend ส่ง "PROGRESS:50" ออกมา
       if (msg.startsWith("PROGRESS:")) {
         const percent = parseInt(msg.split(":")[1])
         event.sender.send("flash-progress", percent)
@@ -77,10 +80,13 @@ ipcMain.handle("flash-iso", async (event, isoPath, device) => {
     })
 
     proc.stderr.on("data", (data) => {
-      event.sender.send("flash-error", data.toString())
+      const err = data.toString().trim()
+      console.error("Backend ERR:", err)
+      event.sender.send("flash-error", err)
     })
 
     proc.on("close", (code) => {
+      console.log("Backend Exit Code:", code)
       resolve({ success: code === 0 })
     })
   })
