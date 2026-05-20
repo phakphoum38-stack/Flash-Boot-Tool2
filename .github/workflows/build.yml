@@ -53,13 +53,13 @@ jobs:
 
     - name: Create frontend resources folder
       shell: cmd
-      run: mkdir frontend\resources
+      run: |
+        mkdir frontend\resources
+        mkdir frontend\resources\backend
 
     - name: Copy backend.exe to frontend resources
       shell: cmd
-      run: |
-        mkdir frontend\resources\backend
-        copy backend\dist\backend.exe frontend\resources\backend\backend.exe
+      run: copy backend\dist\backend.exe frontend\resources\backend\backend.exe
 
     - name: Copy ventoy resources
       shell: cmd
