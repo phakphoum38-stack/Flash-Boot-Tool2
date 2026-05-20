@@ -32,9 +32,9 @@ jobs:
     - name: Verify backend.exe
       shell: cmd
       run: |
-        if not exist backend\dist\backend.exe (
-          echo backend.exe not found!
-          exit 1
+        if not exist backend\dist\backend.exe ( 
+          echo backend.exe not found! 
+          exit 1 
         )
         dir backend\dist
 
@@ -46,41 +46,3 @@ jobs:
     - name: Install frontend deps
       working-directory: ./frontend
       run: npm install
-
-    - name: Build React
-      working-directory: ./frontend
-      run: npm run build
-
-    - name: Create frontend resources folder
-      shell: cmd
-      run: |
-        mkdir frontend\resources
-        mkdir frontend\resources\backend
-
-    - name: Copy backend.exe to frontend resources
-      shell: cmd
-      run: copy backend\dist\backend.exe frontend\resources\backend\backend.exe
-
-    - name: Copy ventoy resources
-      shell: cmd
-      run: xcopy backend\flash_tool\resources\ventoy frontend\resources\ventoy /E /I /Y
-
-    - name: Build Electron
-      working-directory: ./frontend
-      run: npm run dist
-
-    - name: Upload Artifact
-      uses: actions/upload-artifact@v4.6.2
-      with:
-        name: Flash-Boot-Tool-${{ github.run_number }}
-        path: frontend/dist/*.exe
-        if-no-files-found: error
-
-    - name: Create Release
-      uses: softprops/action-gh-release@v2
-      if: startsWith(github.ref, 'refs/tags/')
-      with:
-        files: frontend/dist/*.exe
-        generate_release_notes: true
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
