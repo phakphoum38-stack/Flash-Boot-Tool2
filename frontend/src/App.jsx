@@ -92,3 +92,18 @@ function App() {
 }
 
 export default App
+
+const [isPaused, setIsPaused] = useState(false)
+
+const handleCancel = async () => {
+  await window.electron.cancelFlash()
+}
+
+const handlePause = async () => {
+  if (isPaused) {
+    await window.electron.resumeFlash()
+  } else {
+    await window.electron.pauseFlash()
+  }
+  setIsPaused(!isPaused)
+}
