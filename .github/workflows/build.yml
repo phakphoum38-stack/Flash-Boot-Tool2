@@ -1,9 +1,8 @@
 name: Build Flash Boot Tool
-
 on:
   push:
     branches: [ main ]
-    tags: [ 'v*' ]  # เพิ่มให้มันรันตอน push tag ด้วย
+    tags: [ 'v*' ]
 
 jobs:
   build:
@@ -51,6 +50,20 @@ jobs:
     - name: Build React
       working-directory: ./frontend
       run: npm run build
+
+    - name: Create frontend resources folder
+      shell: cmd
+      run: mkdir frontend\resources
+
+    - name: Copy backend.exe to frontend resources
+      shell: cmd
+      run: |
+        mkdir frontend\resources\backend
+        copy backend\dist\backend.exe frontend\resources\backend\backend.exe
+
+    - name: Copy ventoy resources
+      shell: cmd
+      run: xcopy backend\flash_tool\resources\ventoy frontend\resources\ventoy /E /I /Y
 
     - name: Build Electron
       working-directory: ./frontend
