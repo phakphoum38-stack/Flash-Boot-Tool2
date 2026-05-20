@@ -19,3 +19,18 @@ contextBridge.exposeInMainWorld('electron', {
   selectIsoFile: () => ipcRenderer.invoke('select-iso'),
   getUsbDevices: () => ipcRenderer.invoke('get-usb-devices')
 })
+
+contextBridge.exposeInMainWorld('electron', {
+  flashIso: (mode: string, isoPath: string, device: string) =>
+    ipcRenderer.invoke('flash-iso', mode, isoPath, device),
+
+  onFlashEvent: (callback) => {
+    const handler = (_: any, event) => callback(event)
+    ipcRenderer.on('flash-event', handler)
+    return () => ipcRenderer.removeListener('flash-event', handler)
+  },
+
+  selectIsoFile: () => ipcRenderer.invoke('select-iso'),
+  getUsbDevices: () => ipcRenderer.invoke('get-usb-devices'),
+  getFileSize: (path: string) => ipcRenderer.invoke('get-file-size', path)
+})
