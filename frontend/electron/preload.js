@@ -1,3 +1,6 @@
+console.log('preload loaded')
+const { contextBridge, ipcRenderer } = require('electron')
+...
 const { contextBridge, ipcRenderer } = require('electron')
 
 contextBridge.exposeInMainWorld('electron', {
