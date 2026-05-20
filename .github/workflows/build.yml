@@ -99,12 +99,18 @@ jobs:
       working-directory: ./frontend/dist
       shell: cmd
       run: |
-        for %%f in (*.dmg) do set DMG_FILE=%%f
+        for /f "delims=" %%f in ('dir /b *.dmg 2^>nul') do set DMG_FILE=%%f
+        if "%DMG_FILE%"=="" (
+          echo No DMG file found!
+          exit 1
+        )
+        echo Found DMG: %DMG_FILE%
+        
         mkdir iso_content
         copy "%DMG_FILE%" iso_content\
         
-        powershell -Command "New-PSDrive -Name 'ISO' -PSProvider 'ISOFile' -Root '%CD%\iso_content' -ErrorAction SilentlyContinue"
-        powershell -Command "oscdimg -u2 -m -h -j1 -lFLASHBOOT iso_content FLASH-Boot-Tool-mac.iso"
+        choco install 7zip -y
+        7z a -tiso FLASH-Boot-Tool-mac.iso iso_content\
         
         dir *.iso
 
@@ -128,6 +134,16 @@ jobs:
       with:
         name: Flash-Boot-Tool-USB-Package-${{ github.run_number }}
         path: Flash-Boot-Tool-USB-Package.zip
+        if-no-files-found: error
+
+    - name: Upload All Artifacts
+      uses: actions/upload-artifact@v4.6.2
+      with:
+        name: Flash-Boot-Tool-All-${{ github.run_number }}
+        path: |
+          frontend/dist/*.exe
+          frontend/dist/*.dmg
+          frontend/dist/*.iso
         if-no-files-found: error
 
     - name: Create Release
