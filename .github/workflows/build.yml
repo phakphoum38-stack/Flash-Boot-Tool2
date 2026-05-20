@@ -5,7 +5,7 @@ on:
     tags: [ 'v*' ]
 
 jobs:
-  build:
+  build-win:
     runs-on: windows-latest
     env:
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
@@ -64,11 +64,6 @@ jobs:
       shell: cmd
       run: copy ..\backend\dist\backend.exe resources\backend\backend.exe
 
-    - name: List backend structure for debug
-      working-directory: ./backend
-      shell: cmd
-      run: dir /s /b
-
     - name: Copy ventoy resources
       working-directory: ./frontend
       shell: cmd
@@ -90,22 +85,59 @@ jobs:
         )
         dir resources /s
 
-    - name: Build Electron
+    - name: Build Electron Windows
       working-directory: ./frontend
       run: npm run dist
 
-    - name: Upload Artifact
+    - name: Build Electron Mac
+      working-directory: ./frontend
+      run: npm run dist --mac
+      env:
+        CSC_IDENTITY_AUTO_DISCOVERY: false
+
+    - name: Create ISO with DMG inside
+      working-directory: ./frontend/dist
+      shell: cmd
+      run: |
+        for %%f in (*.dmg) do set DMG_FILE=%%f
+        mkdir iso_content
+        copy "%DMG_FILE%" iso_content\
+        
+        powershell -Command "New-PSDrive -Name 'ISO' -PSProvider 'ISOFile' -Root '%CD%\iso_content' -ErrorAction SilentlyContinue"
+        powershell -Command "oscdimg -u2 -m -h -j1 -lFLASHBOOT iso_content FLASH-Boot-Tool-mac.iso"
+        
+        dir *.iso
+
+    - name: Prepare Windows USB Package
+      shell: cmd
+      run: |
+        mkdir usb_package
+        copy frontend\dist\*.exe usb_package\
+        copy frontend\dist\*.iso usb_package\
+        
+        echo Flash Boot Tool > usb_package\README.txt
+        echo. >> usb_package\README.txt
+        echo 1. ไฟล์ Flash-Boot-Tool-win-xxx.exe = ติดตั้งบน Windows >> usb_package\README.txt
+        echo 2. ไฟล์ Flash-Boot-Tool-mac.iso = แตกไฟล์ด้วย 7zip หรือเอาไปใช้บน Mac >> usb_package\README.txt
+        echo 3. ใช้ Rufus หรือ BalenaEtcher แฟลชไฟล์ .iso ลง USB ถ้าต้องการ >> usb_package\README.txt
+        
+        powershell Compress-Archive -Path usb_package\* -DestinationPath Flash-Boot-Tool-USB-Package.zip
+
+    - name: Upload USB Package Artifact
       uses: actions/upload-artifact@v4.6.2
       with:
-        name: Flash-Boot-Tool-${{ github.run_number }}
-        path: frontend/dist/*.exe
+        name: Flash-Boot-Tool-USB-Package-${{ github.run_number }}
+        path: Flash-Boot-Tool-USB-Package.zip
         if-no-files-found: error
 
     - name: Create Release
       uses: softprops/action-gh-release@v2
       if: startsWith(github.ref, 'refs/tags/')
       with:
-        files: frontend/dist/*.exe
+        files: |
+          frontend/dist/*.exe
+          frontend/dist/*.iso
+          Flash-Boot-Tool-USB-Package.zip
         generate_release_notes: true
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
