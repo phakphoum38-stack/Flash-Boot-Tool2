@@ -3,19 +3,21 @@ import { useState, useEffect } from 'react'
 function App() {
   const [isoPath, setIsoPath] = useState('')
   const [device, setDevice] = useState('')
-  const [usbDevices, setUsbDevices] = useState([]) // เพิ่มตรงนี้
+  const [usbDevices, setUsbDevices] = useState([])
   const [progress, setProgress] = useState(0)
   const [status, setStatus] = useState('idle')
+  const [isPaused, setIsPaused] = useState(false)
 
   useEffect(() => {
     // โหลดรายชื่อ USB ตอนเปิดแอพ
     window.electron.getUsbDevices().then(setUsbDevices)
-    
     window.electron.onFlashProgress(setProgress)
     window.electron.onFlashError((err) => {
       setStatus('error')
+      setIsPaused(false)
       alert('Error: ' + err)
     })
+    
     return () => {
       window.electron.removeAllListeners('flash-progress')
       window.electron.removeAllListeners('flash-error')
@@ -26,6 +28,7 @@ function App() {
     if (!isoPath || !device) return alert('เลือกไฟล์ ISO และ Device ก่อน')
     setStatus('flashing')
     setProgress(0)
+    setIsPaused(false)
     const res = await window.electron.flashIso(isoPath, device)
     setStatus(res.success ? 'done' : 'error')
     if (res.success) alert('Flash เสร็จแล้ว!')
@@ -38,8 +41,26 @@ function App() {
     }
   }
 
+  const handleCancel = async () => {
+    await window.electron.cancelFlash()
+    setStatus('idle')
+    setProgress(0)
+    setIsPaused(false)
+  }
+
+  const handlePause = async () => {
+    if (isPaused) {
+      await window.electron.resumeFlash()
+    } else {
+      await window.electron.pauseFlash()
+    }
+    setIsPaused(!isPaused)
+  }
+
+  const isFlashing = status === 'flashing'
+
   return (
-    <div style={{ padding: 20 }}>
+    <div style={{ padding: 20, fontFamily: 'sans-serif' }}>
       <h2>Flash Boot Tool</h2>
       
       <div>
@@ -49,16 +70,18 @@ function App() {
           value={isoPath} 
           readOnly 
           style={{ width: 300, margin: '0 10px' }} 
+          disabled={isFlashing}
         />
-        <button onClick={handleSelectIso}>Browse</button>
+        <button onClick={handleSelectIso} disabled={isFlashing}>Browse</button>
       </div>
 
       <div style={{ marginTop: 10 }}>
         <label>USB Device:</label>
         <select 
           value={device} 
-          onChange={(e) => setDevice(e.target.value)}
+          onChange={(e) => setDevice(e.target.value)} 
           style={{ marginLeft: 10, width: 350 }}
+          disabled={isFlashing}
         >
           <option value="">-- เลือก USB --</option>
           {usbDevices.map(d => (
@@ -69,41 +92,53 @@ function App() {
         </select>
       </div>
 
-      <button 
-        onClick={handleFlash} 
-        disabled={status === 'flashing'} 
-        style={{ marginTop: 20 }}
-      >
-        {status === 'flashing' ? 'Flashing...' : 'Start Flash'}
-      </button>
+      <div style={{ marginTop: 20 }}>
+        <button 
+          onClick={handleFlash} 
+          disabled={isFlashing || !isoPath || !device}
+          style={{ padding: '8px 16px' }}
+        >
+          {isFlashing ? 'Flashing...' : 'Start Flash'}
+        </button>
 
-      {status === 'flashing' && (
+        {isFlashing && (
+          <>
+            <button 
+              onClick={handlePause} 
+              style={{ marginLeft: 10, padding: '8px 16px' }}
+            >
+              {isPaused ? 'Resume' : 'Pause'}
+            </button>
+            <button 
+              onClick={handleCancel} 
+              style={{ marginLeft: 10, padding: '8px 16px', color: 'red' }}
+            >
+              Cancel
+            </button>
+          </>
+        )}
+      </div>
+
+      {isFlashing && (
         <div style={{ marginTop: 20 }}>
-          <div style={{ border: '1px solid #ccc', height: 20 }}>
-            <div style={{ width: `${progress}%`, height: '100%', background: 'green' }} />
+          <div style={{ border: '1px solid #ccc', height: 20, width: 400 }}>
+            <div 
+              style={{ 
+                width: `${progress}%`, 
+                height: '100%', 
+                background: isPaused ? 'orange' : 'green',
+                transition: 'width 0.3s'
+              }} 
+            />
           </div>
-          <p>{progress}%</p>
+          <p>{progress}% {isPaused && '(Paused)'}</p>
         </div>
       )}
 
-      {status === 'done' && <p style={{ color: 'green' }}>สำเร็จ!</p>}
+      {status === 'done' && <p style={{ color: 'green', marginTop: 20 }}>สำเร็จ! ถอด USB ไปใช้งานได้เลย</p>}
+      {status === 'error' && <p style={{ color: 'red', marginTop: 20 }}>เกิดข้อผิดพลาด</p>}
     </div>
   )
 }
 
 export default App
-
-const [isPaused, setIsPaused] = useState(false)
-
-const handleCancel = async () => {
-  await window.electron.cancelFlash()
-}
-
-const handlePause = async () => {
-  if (isPaused) {
-    await window.electron.resumeFlash()
-  } else {
-    await window.electron.pauseFlash()
-  }
-  setIsPaused(!isPaused)
-}
