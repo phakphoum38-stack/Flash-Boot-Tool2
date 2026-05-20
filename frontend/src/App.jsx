@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 
 function App() {
+  const [mode, setMode] = useState('dd') // เพิ่ม: dd, smart, ventoy
   const [isoPath, setIsoPath] = useState('')
   const [device, setDevice] = useState('')
   const [usbDevices, setUsbDevices] = useState([])
@@ -9,19 +10,23 @@ function App() {
   const [isPaused, setIsPaused] = useState(false)
 
   useEffect(() => {
-    // โหลดรายชื่อ USB ตอนเปิดแอพ
     window.electron.getUsbDevices().then(setUsbDevices)
-    window.electron.onFlashProgress(setProgress)
-    window.electron.onFlashError((err) => {
-      setStatus('error')
-      setIsPaused(false)
-      alert('Error: ' + err)
-    })
     
-    return () => {
-      window.electron.removeAllListeners('flash-progress')
-      window.electron.removeAllListeners('flash-error')
-    }
+    const unsubscribe = window.electron.onFlashEvent((event) => {
+      if (event.type === 'progress') setProgress(event.value)
+      if (event.type === 'error') {
+        setStatus('error')
+        setIsPaused(false)
+        alert('Error: ' + event.msg)
+      }
+      if (event.type === 'result') {
+        setStatus(event.success ? 'done' : 'error')
+        setIsPaused(false)
+        if (event.success) alert('Flash เสร็จแล้ว!')
+      }
+    })
+
+    return () => unsubscribe()
   }, [])
 
   const handleFlash = async () => {
@@ -29,16 +34,12 @@ function App() {
     setStatus('flashing')
     setProgress(0)
     setIsPaused(false)
-    const res = await window.electron.flashIso(isoPath, device)
-    setStatus(res.success ? 'done' : 'error')
-    if (res.success) alert('Flash เสร็จแล้ว!')
+    await window.electron.flashIso(mode, isoPath, device) // ส่ง mode ไปด้วย
   }
 
   const handleSelectIso = async () => {
     const filePath = await window.electron.selectIsoFile()
-    if (filePath) {
-      setIsoPath(filePath)
-    }
+    if (filePath) setIsoPath(filePath)
   }
 
   const handleCancel = async () => {
@@ -59,10 +60,32 @@ function App() {
 
   const isFlashing = status === 'flashing'
 
+  const tabStyle = (active) => ({
+    padding: '8px 16px',
+    marginRight: 10,
+    border: '1px solid #ccc',
+    background: active ? '#007bff' : '#eee',
+    color: active ? 'white' : 'black',
+    cursor: isFlashing ? 'not-allowed' : 'pointer'
+  })
+
   return (
     <div style={{ padding: 20, fontFamily: 'sans-serif' }}>
       <h2>Flash Boot Tool</h2>
       
+      {/* Tab เลือกโหมด */}
+      <div style={{ marginBottom: 20 }}>
+        <button onClick={() => setMode('dd')} disabled={isFlashing} style={tabStyle(mode === 'dd')}>
+          DD Flash
+        </button>
+        <button onClick={() => setMode('smart')} disabled={isFlashing} style={tabStyle(mode === 'smart')}>
+          Smart Flash
+        </button>
+        <button onClick={() => setMode('ventoy')} disabled={isFlashing} style={tabStyle(mode === 'ventoy')}>
+          Ventoy Flash
+        </button>
+      </div>
+
       <div>
         <label>ISO File:</label>
         <input 
@@ -103,16 +126,10 @@ function App() {
 
         {isFlashing && (
           <>
-            <button 
-              onClick={handlePause} 
-              style={{ marginLeft: 10, padding: '8px 16px' }}
-            >
+            <button onClick={handlePause} style={{ marginLeft: 10, padding: '8px 16px' }}>
               {isPaused ? 'Resume' : 'Pause'}
             </button>
-            <button 
-              onClick={handleCancel} 
-              style={{ marginLeft: 10, padding: '8px 16px', color: 'red' }}
-            >
+            <button onClick={handleCancel} style={{ marginLeft: 10, padding: '8px 16px', color: 'red' }}>
               Cancel
             </button>
           </>
