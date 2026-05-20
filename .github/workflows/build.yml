@@ -29,15 +29,6 @@ jobs:
       working-directory: ./backend
       run: pyinstaller --onefile --name backend main.py
 
-    - name: Verify backend.exe
-      shell: cmd
-      run: |
-        if not exist backend\dist\backend.exe ( 
-          echo backend.exe not found! 
-          exit 1 
-        )
-        dir backend\dist
-
     - name: Setup Node
       uses: actions/setup-node@v4.4.0
       with:
@@ -70,24 +61,52 @@ jobs:
       run: |
         if exist ..\backend\flash_tool\resources\ventoy (
           xcopy ..\backend\flash_tool\resources\ventoy resources\ventoy /E /I /Y
-        ) else (
-          echo ERROR: ventoy folder not found at backend\flash_tool\resources\ventoy
-          exit 1
         )
-
-    - name: Verify resources copied
-      working-directory: ./frontend
-      shell: cmd
-      run: |
-        if not exist resources\backend\backend.exe (
-          echo backend.exe copy failed!
-          exit 1
-        )
-        dir resources /s
 
     - name: Build Electron Windows
       working-directory: ./frontend
       run: npm run dist
+
+    - name: Upload Windows Artifact
+      uses: actions/upload-artifact@v4.6.2
+      with:
+        name: Flash-Boot-Tool-win-${{ github.run_number }}
+        path: frontend/dist/*.exe
+        if-no-files-found: error
+
+  build-mac:
+    runs-on: macos-latest
+    needs: build-win
+    
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4.3.0
+
+    - name: Setup Node
+      uses: actions/setup-node@v4.4.0
+      with:
+        node-version: "24"
+
+    - name: Download Windows Artifact
+      uses: actions/download-artifact@v4.6.2
+      with:
+        name: Flash-Boot-Tool-win-${{ github.run_number }}
+        path: ./win-artifact
+
+    - name: Install frontend deps
+      working-directory: ./frontend
+      run: npm install
+
+    - name: Build React
+      working-directory: ./frontend
+      run: npm run build
+
+    - name: Prepare frontend resources
+      working-directory: ./frontend
+      run: |
+        mkdir -p resources/backend
+        mkdir -p resources/ventoy
+        cp ../backend/flash_tool/resources/ventoy/* resources/ventoy/ 2>/dev/null || true
 
     - name: Build Electron Mac
       working-directory: ./frontend
@@ -97,61 +116,48 @@ jobs:
 
     - name: Create ISO with DMG inside
       working-directory: ./frontend/dist
-      shell: cmd
       run: |
-        for /f "delims=" %%f in ('dir /b *.dmg 2^>nul') do set DMG_FILE=%%f
-        if "%DMG_FILE%"=="" (
-          echo No DMG file found!
-          exit 1
-        )
-        echo Found DMG: %DMG_FILE%
-        
+        DMG_FILE=$(ls *.dmg | head -n 1)
         mkdir iso_content
-        copy "%DMG_FILE%" iso_content\
-        
-        choco install 7zip -y
-        7z a -tiso FLASH-Boot-Tool-mac.iso iso_content\
-        
-        dir *.iso
+        cp "$DMG_FILE" iso_content/
+        hdiutil makehybrid -o FLASH-Boot-Tool-mac.iso iso_content -hfs -hfs-volume-name "FlashBoot"
 
-    - name: Prepare Windows USB Package
-      shell: cmd
+    - name: Create USB Package with Flash Script
       run: |
         mkdir usb_package
-        copy frontend\dist\*.exe usb_package\
-        copy frontend\dist\*.iso usb_package\
+        cp win-artifact/*.exe usb_package/
+        cp frontend/dist/*.iso usb_package/
         
-        echo Flash Boot Tool > usb_package\README.txt
-        echo. >> usb_package\README.txt
-        echo 1. ไฟล์ Flash-Boot-Tool-win-xxx.exe = ติดตั้งบน Windows >> usb_package\README.txt
-        echo 2. ไฟล์ Flash-Boot-Tool-mac.iso = แตกไฟล์ด้วย 7zip หรือเอาไปใช้บน Mac >> usb_package\README.txt
-        echo 3. ใช้ Rufus หรือ BalenaEtcher แฟลชไฟล์ .iso ลง USB ถ้าต้องการ >> usb_package\README.txt
+        cat > usb_package/flash_usb.bat << 'EOF'
+        @echo off
+        echo WARNING: This will erase your USB drive!
+        set /p DRIVE=Enter USB drive letter (e.g. E): 
+        set ISO_FILE=FLASH-Boot-Tool-mac.iso
         
-        powershell Compress-Archive -Path usb_package\* -DestinationPath Flash-Boot-Tool-USB-Package.zip
+        echo Writing ISO to %DRIVE%:...
+        rufus.exe %DRIVE%: -i %ISO_FILE% -n "FlashBoot" -f FAT32 --quiet
+        echo Done! You can now remove the USB.
+        pause
+        EOF
+        
+        echo Flash Boot Tool > usb_package/README.txt
+        echo 1. Run flash_usb.bat as Administrator to write ISO to USB >> usb_package/README.txt
+        echo 2. Download rufus.exe and put it in the same folder first >> usb_package/README.txt
+        
+        zip -r Flash-Boot-Tool-USB-Package.zip usb_package/
 
-    - name: Upload USB Package Artifact
+    - name: Upload USB Package
       uses: actions/upload-artifact@v4.6.2
       with:
         name: Flash-Boot-Tool-USB-Package-${{ github.run_number }}
         path: Flash-Boot-Tool-USB-Package.zip
-        if-no-files-found: error
-
-    - name: Upload All Artifacts
-      uses: actions/upload-artifact@v4.6.2
-      with:
-        name: Flash-Boot-Tool-All-${{ github.run_number }}
-        path: |
-          frontend/dist/*.exe
-          frontend/dist/*.dmg
-          frontend/dist/*.iso
-        if-no-files-found: error
 
     - name: Create Release
       uses: softprops/action-gh-release@v2
       if: startsWith(github.ref, 'refs/tags/')
       with:
         files: |
-          frontend/dist/*.exe
+          frontend/dist/*.dmg
           frontend/dist/*.iso
           Flash-Boot-Tool-USB-Package.zip
         generate_release_notes: true
