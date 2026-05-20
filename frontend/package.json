@@ -22,6 +22,10 @@
   "build": {
     "appId": "com.flashboot.tool",
     "productName": "Flash Boot Tool",
+    "directories": {
+      "output": "dist"
+    },
+    "artifactName": "${productName}-Setup-${version}.${ext}",
     "files": [
       "dist/**/*",
       "electron/**/*"
