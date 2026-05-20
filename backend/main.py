@@ -1,7 +1,6 @@
 import sys
 import json
 import os
-
 try:
     import win32file
     import win32api
@@ -16,34 +15,42 @@ def flash_iso(iso_path, device_path):
         if not os.path.exists(iso_path):
             return {"success": False, "error": "ISO file not found"}
 
-        # เปิดไฟล์ ISO อ่านอย่างเดียว
+        iso_size = os.path.getsize(iso_path)
+
+        # เปิดไฟล์ ISO
         with open(iso_path, 'rb') as iso_file:
-            iso_size = os.path.getsize(iso_path)
+            # เปิด device สำหรับเขียน - ไม่ต้องใส่ \\.\ ซ้ำ
+            try:
+                handle = win32file.CreateFileW(
+                    device_path, # ใช้ตรงๆเลย
+                    win32file.GENERIC_WRITE,
+                    0,
+                    None,
+                    win32file.OPEN_EXISTING,
+                    win32file.FILE_FLAG_NO_BUFFERING,
+                    None
+                )
+            except Exception as e:
+                return {"success": False, "error": f"Cannot open device: {str(e)}. Run as Administrator?"}
 
-            # เปิด device สำหรับเขียน
-            handle = win32file.CreateFileW(
-                f"\\\\.\\{device_path}",
-                win32file.GENERIC_WRITE,
-                0, None,
-                win32file.OPEN_EXISTING,
-                0, None
-            )
+            written_total = 0
+            while True:
+                chunk = iso_file.read(CHUNK_SIZE)
+                if not chunk:
+                    break
 
-        written_total = 0
+                try:
+                    win32file.WriteFile(handle, chunk)
+                except Exception as e:
+                    win32file.CloseHandle(handle)
+                    return {"success": False, "error": f"Write failed: {str(e)}"}
 
-        while True:
-            chunk = iso_file.read(CHUNK_SIZE)
-            if not chunk:
-                break
+                written_total += len(chunk)
+                progress = int(written_total * 100 / iso_size)
+                print(json.dumps({"progress": progress}), flush=True)
 
-            win32file.WriteFile(handle, chunk)
-            written_total += len(chunk)
-
-            progress = int(written_total * 100 / iso_size)
-            print(json.dumps({"progress": progress}), flush=True)
-
-        win32file.CloseHandle(handle)
-        return {"success": True, "message": "Flash completed"}
+            win32file.CloseHandle(handle)
+            return {"success": True, "message": "Flash completed"}
 
     except Exception as e:
         return {"success": False, "error": str(e)}
