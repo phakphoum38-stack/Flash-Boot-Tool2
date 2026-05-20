@@ -12,7 +12,7 @@ jobs:
     
     steps:
     - name: Checkout
-      uses: actions/checkout@v4.2.2
+      uses: actions/checkout@v4.3.0
 
     - name: Setup Python
       uses: actions/setup-python@v5.3.0
@@ -41,8 +41,64 @@ jobs:
     - name: Setup Node
       uses: actions/setup-node@v4.4.0
       with:
-        node-version: "20"
+        node-version: "24"
 
     - name: Install frontend deps
       working-directory: ./frontend
       run: npm install
+
+    - name: Build React
+      working-directory: ./frontend
+      run: npm run build
+
+    - name: Prepare frontend resources
+      working-directory: ./frontend
+      shell: cmd
+      run: |
+        mkdir resources
+        mkdir resources\backend
+        mkdir resources\ventoy
+
+    - name: Copy backend.exe to frontend resources
+      working-directory: ./frontend
+      shell: cmd
+      run: copy ..\backend\dist\backend.exe resources\backend\backend.exe
+
+    - name: Copy ventoy resources
+      working-directory: ./frontend
+      shell: cmd
+      run: xcopy ..\backend\flash_tool\ventoy resources\ventoy /E /I /Y
+
+    - name: Verify resources copied
+      working-directory: ./frontend
+      shell: cmd
+      run: |
+        if not exist resources\backend\backend.exe (
+          echo backend.exe copy failed!
+          exit 1
+        )
+        if not exist resources\ventoy\Ventoy2Disk.exe (
+          echo Ventoy2Disk.exe copy failed!
+          exit 1
+        )
+        dir resources /s
+
+    - name: Build Electron
+      working-directory: ./frontend
+      run: npm run dist
+
+    - name: Upload Artifact
+      uses: actions/upload-artifact@v4.6.2
+      with:
+        name: Flash-Boot-Tool-${{ github.run_number }}
+        path: frontend/dist/*.exe
+        if-no-files-found: error
+
+    - name: Create Release
+      uses: softprops/action-gh-release@v2
+      if: startsWith(github.ref, 'refs/tags/')
+      with:
+        files: frontend/dist/*.exe
+        generate_release_notes: true
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
