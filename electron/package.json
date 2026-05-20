@@ -27,6 +27,8 @@
     "directories": { "output": "release" },
     "extraResources": [
       { "from": "../backend/dist/backend.exe", "to": "backend/backend.exe" }
+      { "from": "../backend/flash_tool/resources/",
+    "to": "backend/resources" }
     ],
     "files": [
       "dist/**/*",
