@@ -1,165 +1,173 @@
 name: Build Flash Boot Tool
+
 on:
   push:
-    branches: [ main ]
-    tags: [ 'v*' ]
+    branches:
+      - main
+    tags:
+      - 'v*'
 
 jobs:
   build-win:
     runs-on: windows-latest
+
     env:
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
-    
+
     steps:
-    - name: Checkout
-      uses: actions/checkout@v4.3.0
+      - name: Checkout
+        uses: actions/checkout@v4
 
-    - name: Setup Python
-      uses: actions/setup-python@v5.3.0
-      with:
-        python-version: "3.11"
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
 
-    - name: Install backend deps
-      working-directory: ./backend
-      run: |
-        pip install -r requirements.txt
-        pip install pyinstaller
+      - name: Install backend deps
+        working-directory: ./backend
+        run: |
+          pip install -r requirements.txt
+          pip install pyinstaller
 
-    - name: Build backend.exe
-      working-directory: ./backend
-      run: pyinstaller --onefile --name backend main.py
+      - name: Build backend.exe
+        working-directory: ./backend
+        run: pyinstaller --onefile --name backend main.py
 
-    - name: Setup Node
-      uses: actions/setup-node@v4.4.0
-      with:
-        node-version: "24"
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
 
-    - name: Install frontend deps
-      working-directory: ./frontend
-      run: npm install
+      - name: Install frontend deps
+        working-directory: ./frontend
+        run: npm install
 
-    - name: Build React
-      working-directory: ./frontend
-      run: npm run build
+      - name: Build React
+        working-directory: ./frontend
+        run: npm run build
 
-    - name: Prepare frontend resources
-      working-directory: ./frontend
-      shell: cmd
-      run: |
-        mkdir resources
-        mkdir resources\backend
-        mkdir resources\ventoy
+      - name: Prepare frontend resources
+        working-directory: ./frontend
+        shell: cmd
+        run: |
+          if not exist resources mkdir resources
+          if not exist resources\backend mkdir resources\backend
+          if not exist resources\ventoy mkdir resources\ventoy
 
-    - name: Copy backend.exe to frontend resources
-      working-directory: ./frontend
-      shell: cmd
-      run: copy ..\backend\dist\backend.exe resources\backend\backend.exe
+      - name: Copy backend.exe
+        working-directory: ./frontend
+        shell: cmd
+        run: |
+          copy ..\backend\dist\backend.exe resources\backend\backend.exe
 
-    - name: Copy ventoy resources
-      working-directory: ./frontend
-      shell: cmd
-      run: |
-        if exist ..\backend\flash_tool\resources\ventoy (
-          xcopy ..\backend\flash_tool\resources\ventoy resources\ventoy /E /I /Y
-        )
+      - name: Copy ventoy resources
+        working-directory: ./frontend
+        shell: cmd
+        run: |
+          if exist ..\backend\flash_tool\resources\ventoy (
+            xcopy ..\backend\flash_tool\resources\ventoy resources\ventoy /E /I /Y
+          )
 
-    - name: Build Electron Windows
-      working-directory: ./frontend
-      run: npm run dist
+      - name: Build Electron Windows
+        working-directory: ./frontend
+        run: npm run dist
 
-    - name: Upload Windows Artifact
-      uses: actions/upload-artifact@v4.6.2
-      with:
-        name: Flash-Boot-Tool-win-${{ github.run_number }}
-        path: frontend/dist/*.exe
-        if-no-files-found: error
+      - name: Upload Windows Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Flash-Boot-Tool-win-${{ github.run_number }}
+          path: frontend/dist/*.exe
+          if-no-files-found: error
 
   build-mac:
     runs-on: macos-latest
     needs: build-win
-    
+
     steps:
-    - name: Checkout
-      uses: actions/checkout@v4.3.0
+      - name: Checkout
+        uses: actions/checkout@v4
 
-    - name: Setup Node
-      uses: actions/setup-node@v4.4.0
-      with:
-        node-version: "24"
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
 
-    - name: Download Windows Artifact
-      uses: actions/download-artifact@v4.6.2
-      with:
-        name: Flash-Boot-Tool-win-${{ github.run_number }}
-        path: ./win-artifact
+      - name: Download Windows Artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: Flash-Boot-Tool-win-${{ github.run_number }}
+          path: ./win-artifact
 
-    - name: Install frontend deps
-      working-directory: ./frontend
-      run: npm install
+      - name: Install frontend deps
+        working-directory: ./frontend
+        run: npm install
 
-    - name: Build React
-      working-directory: ./frontend
-      run: npm run build
+      - name: Build React
+        working-directory: ./frontend
+        run: npm run build
 
-    - name: Prepare frontend resources
-      working-directory: ./frontend
-      run: |
-        mkdir -p resources/backend
-        mkdir -p resources/ventoy
-        cp ../backend/flash_tool/resources/ventoy/* resources/ventoy/ 2>/dev/null || true
+      - name: Prepare frontend resources
+        working-directory: ./frontend
+        run: |
+          mkdir -p resources/backend
+          mkdir -p resources/ventoy
 
-    - name: Build Electron Mac
-      working-directory: ./frontend
-      run: npm run dist --mac
-      env:
-        CSC_IDENTITY_AUTO_DISCOVERY: false
+          if [ -d "../backend/flash_tool/resources/ventoy" ]; then
+            cp -R ../backend/flash_tool/resources/ventoy/* resources/ventoy/
+          fi
 
-    - name: Create ISO with DMG inside
-      working-directory: ./frontend/dist
-      run: |
-        DMG_FILE=$(ls *.dmg | head -n 1)
-        mkdir iso_content
-        cp "$DMG_FILE" iso_content/
-        hdiutil makehybrid -o FLASH-Boot-Tool-mac.iso iso_content -hfs -hfs-volume-name "FlashBoot"
+      - name: Build Electron Mac
+        working-directory: ./frontend
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: false
+        run: npm run dist --mac
 
-    - name: Create USB Package with Flash Script
-      run: |
-        mkdir usb_package
-        cp win-artifact/*.exe usb_package/
-        cp frontend/dist/*.iso usb_package/
-        
-        cat > usb_package/flash_usb.bat << 'EOF'
-        @echo off
-        echo WARNING: This will erase your USB drive!
-        set /p DRIVE=Enter USB drive letter (e.g. E): 
-        set ISO_FILE=FLASH-Boot-Tool-mac.iso
-        
-        echo Writing ISO to %DRIVE%:...
-        rufus.exe %DRIVE%: -i %ISO_FILE% -n "FlashBoot" -f FAT32 --quiet
-        echo Done! You can now remove the USB.
-        pause
-        EOF
-        
-        echo Flash Boot Tool > usb_package/README.txt
-        echo 1. Run flash_usb.bat as Administrator to write ISO to USB >> usb_package/README.txt
-        echo 2. Download rufus.exe and put it in the same folder first >> usb_package/README.txt
-        
-        zip -r Flash-Boot-Tool-USB-Package.zip usb_package/
+      - name: Create ISO with DMG inside
+        working-directory: ./frontend/dist
+        run: |
+          DMG_FILE=$(ls *.dmg | head -n 1)
 
-    - name: Upload USB Package
-      uses: actions/upload-artifact@v4.6.2
-      with:
-        name: Flash-Boot-Tool-USB-Package-${{ github.run_number }}
-        path: Flash-Boot-Tool-USB-Package.zip
+          mkdir iso_content
 
-    - name: Create Release
-      uses: softprops/action-gh-release@v2
-      if: startsWith(github.ref, 'refs/tags/')
-      with:
-        files: |
-          frontend/dist/*.dmg
-          frontend/dist/*.iso
-          Flash-Boot-Tool-USB-Package.zip
-        generate_release_notes: true
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          cp "$DMG_FILE" iso_content/
+
+          hdiutil makehybrid \
+            -o FLASH-Boot-Tool-mac.iso \
+            iso_content \
+            -hfs \
+            -hfs-volume-name "FlashBoot"
+
+      - name: Create USB Package
+        run: |
+          mkdir usb_package
+
+          cp win-artifact/*.exe usb_package/ || true
+          cp frontend/dist/*.iso usb_package/ || true
+
+          echo "@echo off" > usb_package/flash_usb.bat
+          echo "echo WARNING: This will erase your USB drive!" >> usb_package/flash_usb.bat
+          echo "pause" >> usb_package/flash_usb.bat
+
+          echo "Flash Boot Tool" > usb_package/README.txt
+          echo "1. Put rufus.exe in this folder" >> usb_package/README.txt
+          echo "2. Run flash_usb.bat as Administrator" >> usb_package/README.txt
+
+          zip -r Flash-Boot-Tool-USB-Package.zip usb_package
+
+      - name: Upload USB Package
+        uses: actions/upload-artifact@v4
+        with:
+          name: Flash-Boot-Tool-USB-Package-${{ github.run_number }}
+          path: Flash-Boot-Tool-USB-Package.zip
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        if: startsWith(github.ref, 'refs/tags/')
+        with:
+          files: |
+            frontend/dist/*.dmg
+            frontend/dist/*.iso
+            Flash-Boot-Tool-USB-Package.zip
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
