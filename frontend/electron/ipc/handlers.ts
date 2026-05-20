@@ -1,6 +1,9 @@
 import { ipcMain, dialog } from 'electron'
 import { spawn } from 'child_process'
 import path from 'path'
+import { dialog } from 'electron'
+import fs from 'fs'
+import drivelist from 'drivelist'
 
 const backendExe = path.join(process.resourcesPath, 'backend', 'backend.exe')
 
@@ -64,4 +67,27 @@ ipcMain.handle('pause-flash', async () => {
     flashProcess.kill('SIGSTOP')  // pause บน Linux/Mac
     // บน Windows ใช้ suspend process API แทน
   }
+})
+
+ipcMain.handle('select-iso', async () => {
+  const { filePaths } = await dialog.showOpenDialog({
+    filters: [{ name: 'ISO Files', extensions: ['iso'] }]
+  })
+  return filePaths[0]
+})
+
+ipcMain.handle('get-usb-devices', async () => {
+  const devices = await drivelist.list()
+  return devices
+   .filter(d => d.isUSB &&!d.isSystem)
+   .map(d => ({
+      path: d.device,
+      name: d.description,
+      size: d.size
+    }))
+})
+
+ipcMain.handle('get-file-size', async (_, path) => {
+  const stats = fs.statSync(path)
+  return stats.size
 })
