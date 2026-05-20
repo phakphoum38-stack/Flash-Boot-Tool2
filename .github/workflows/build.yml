@@ -73,14 +73,10 @@ jobs:
       working-directory: ./frontend
       shell: cmd
       run: |
-        if exist ..\backend\flash_tool\ventoy (
-          xcopy ..\backend\flash_tool\ventoy resources\ventoy /E /I /Y
-        ) else if exist ..\backend\flash_tool\Ventoy (
-          xcopy ..\backend\flash_tool\Ventoy resources\ventoy /E /I /Y
-        ) else if exist ..\backend\flash_tool\Ventoy2Disk.exe (
-          copy ..\backend\flash_tool\Ventoy2Disk.exe resources\ventoy\
+        if exist ..\backend\flash_tool\resources\ventoy (
+          xcopy ..\backend\flash_tool\resources\ventoy resources\ventoy /E /I /Y
         ) else (
-          echo Ventoy folder not found!
+          echo ERROR: ventoy folder not found at backend\flash_tool\resources\ventoy
           exit 1
         )
 
