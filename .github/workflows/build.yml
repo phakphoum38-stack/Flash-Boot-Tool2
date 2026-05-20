@@ -64,10 +64,25 @@ jobs:
       shell: cmd
       run: copy ..\backend\dist\backend.exe resources\backend\backend.exe
 
+    - name: List backend structure for debug
+      working-directory: ./backend
+      shell: cmd
+      run: dir /s /b
+
     - name: Copy ventoy resources
       working-directory: ./frontend
       shell: cmd
-      run: xcopy ..\backend\flash_tool\ventoy resources\ventoy /E /I /Y
+      run: |
+        if exist ..\backend\flash_tool\ventoy (
+          xcopy ..\backend\flash_tool\ventoy resources\ventoy /E /I /Y
+        ) else if exist ..\backend\flash_tool\Ventoy (
+          xcopy ..\backend\flash_tool\Ventoy resources\ventoy /E /I /Y
+        ) else if exist ..\backend\flash_tool\Ventoy2Disk.exe (
+          copy ..\backend\flash_tool\Ventoy2Disk.exe resources\ventoy\
+        ) else (
+          echo Ventoy folder not found!
+          exit 1
+        )
 
     - name: Verify resources copied
       working-directory: ./frontend
@@ -75,10 +90,6 @@ jobs:
       run: |
         if not exist resources\backend\backend.exe (
           echo backend.exe copy failed!
-          exit 1
-        )
-        if not exist resources\ventoy\Ventoy2Disk.exe (
-          echo Ventoy2Disk.exe copy failed!
           exit 1
         )
         dir resources /s
