@@ -92,11 +92,26 @@ ipcMain.handle("flash-iso", async (event, isoPath, device) => {
   })
 })
 
-app.whenReady().then(() => {
-  startBackend()
-  setTimeout(() => {
-    createWindow()
-  }, 2000)
+const isAdmin = require('is-admin')
+
+isAdmin().then(admin => {
+  if (!admin) {
+    const { spawn } = require('child_process')
+    const path = require('path')
+    const args = process.argv.slice(1)
+    spawn('powershell', ['Start-Process', process.execPath, '-Verb', 'runAs', '-ArgumentList', args.join(',')], {
+      detached: true,
+      stdio: 'ignore'
+    })
+    app.quit()
+    return
+  }
+
+  // โค้ดเดิมของคุณต่อจากนี้
+  app.whenReady().then(() => {
+    startBackend()
+    setTimeout(createWindow, 2000)
+  })
 })
 
 app.on("will-quit", () => {
