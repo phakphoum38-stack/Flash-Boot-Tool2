@@ -4,6 +4,7 @@ const path = require("path")
 const drivelist = require("drivelist")
 
 let backend
+let currentFlashProc = null // เก็บ process ไว้สั่ง pause/cancel
 
 function startBackend() {
   let exePath
@@ -45,8 +46,8 @@ ipcMain.handle("select-iso", async () => {
 ipcMain.handle("get-usb-devices", async () => {
   const drives = await drivelist.list()
   return drives
- .filter(d => d.isUSB &&!d.isSystem)
- .map(d => ({
+   .filter(d => d.isUSB &&!d.isSystem)
+   .map(d => ({
       path: d.device,
       name: d.description,
       size: d.size,
@@ -54,50 +55,81 @@ ipcMain.handle("get-usb-devices", async () => {
     }))
 })
 
-// สั่ง flash พร้อม debug log
-ipcMain.handle("flash-iso", async (event, isoPath, device) => {
+// สั่ง flash - แก้ให้รับ mode
+ipcMain.handle("flash-iso", async (event, mode, isoPath, device) => {
   console.log("=== Flash Start ===")
+  console.log("Mode:", mode)
   console.log("ISO Path:", isoPath)
   console.log("Device:", device)
 
   return new Promise((resolve) => {
     const backendExe = app.isPackaged
-   ? path.join(process.resourcesPath, "backend", "backend.exe")
+     ? path.join(process.resourcesPath, "backend", "backend.exe")
       : path.join(__dirname, "../../backend/dist/backend.exe")
 
     console.log("Backend Exe Path:", backendExe)
 
-    const proc = spawn(backendExe, ["flash", isoPath, device], { windowsHide: true })
+    // ส่ง mode ไปให้ backend ด้วย
+    currentFlashProc = spawn(backendExe, [mode, isoPath, device], { windowsHide: true })
 
-    proc.stdout.on("data", (data) => {
+    currentFlashProc.stdout.on("data", (data) => {
       const msg = data.toString().trim()
       console.log("Backend OUT:", msg)
 
       if (msg.startsWith("PROGRESS:")) {
         const percent = parseInt(msg.split(":")[1])
-        event.sender.send("flash-progress", percent)
+        event.sender.send("flash-event", { type: "progress", value: percent })
+      }
+      if (msg.startsWith("LOG:")) {
+        event.sender.send("flash-event", { type: "log", level: "info", msg: msg.substring(5) })
       }
     })
 
-    proc.stderr.on("data", (data) => {
+    currentFlashProc.stderr.on("data", (data) => {
       const err = data.toString().trim()
       console.error("Backend ERR:", err)
-      event.sender.send("flash-error", err)
+      event.sender.send("flash-event", { type: "error", msg: err })
     })
 
-    proc.on("close", (code) => {
+    currentFlashProc.on("close", (code) => {
       console.log("Backend Exit Code:", code)
+      event.sender.send("flash-event", {
+        type: "result",
+        success: code === 0,
+        msg: code === 0? "Success" : "Failed"
+      })
+      currentFlashProc = null
       resolve({ success: code === 0 })
     })
   })
 })
 
-const isAdmin = require('is-admin')
+// เพิ่ม 3 ตัวนี้
+ipcMain.on("cancel-flash", () => {
+  if (currentFlashProc) {
+    currentFlashProc.kill()
+    currentFlashProc = null
+  }
+})
 
+ipcMain.on("pause-flash", () => {
+  if (currentFlashProc) {
+    currentFlashProc.kill('SIGSTOP') // Linux/Mac
+    // Windows ใช้ taskkill /f /t แต่ต้องใช้ win32-process
+    // ถ้า backend คุณรองรับ pause ให้ส่ง command ไปทาง stdin แทน
+  }
+})
+
+ipcMain.on("resume-flash", () => {
+  if (currentFlashProc) {
+    currentFlashProc.kill('SIGCONT')
+  }
+})
+
+const isAdmin = require('is-admin')
 isAdmin().then(admin => {
   if (!admin) {
     const { spawn } = require('child_process')
-    const path = require('path')
     const args = process.argv.slice(1)
     spawn('powershell', ['Start-Process', process.execPath, '-Verb', 'runAs', '-ArgumentList', args.join(',')], {
       detached: true,
@@ -107,7 +139,6 @@ isAdmin().then(admin => {
     return
   }
 
-  // โค้ดเดิมของคุณต่อจากนี้
   app.whenReady().then(() => {
     startBackend()
     setTimeout(createWindow, 2000)
@@ -116,4 +147,5 @@ isAdmin().then(admin => {
 
 app.on("will-quit", () => {
   if (backend) backend.kill()
+  if (currentFlashProc) currentFlashProc.kill()
 })
