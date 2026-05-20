@@ -33,3 +33,35 @@ ipcMain.handle('flash-iso', async (event, mode, isoPath, device) => {
     })
   })
 })
+
+let flashProcess: ChildProcessWithoutNullStreams | null = null
+
+ipcMain.handle('flash-iso', async (event, mode, isoPath, device) => {
+  return new Promise((resolve, reject) => {
+    flashProcess = spawn(backendExe, ['flash', mode, isoPath, device])
+    
+    flashProcess.stdout.on('data', (data) => {
+      // ... parse JSON ส่งไป frontend
+    })
+    
+    flashProcess.on('exit', (code) => {
+      flashProcess = null
+      if (code === 0) resolve({success: true})
+      else reject(new Error(`Exit code ${code}`))
+    })
+  })
+})
+
+ipcMain.handle('cancel-flash', async () => {
+  if (flashProcess) {
+    flashProcess.kill('SIGTERM')  // ส่งสัญญาณให้ backend หยุด
+    flashProcess = null
+  }
+})
+
+ipcMain.handle('pause-flash', async () => {
+  if (flashProcess) {
+    flashProcess.kill('SIGSTOP')  // pause บน Linux/Mac
+    // บน Windows ใช้ suspend process API แทน
+  }
+})
