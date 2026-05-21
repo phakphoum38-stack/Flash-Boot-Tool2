@@ -32,7 +32,11 @@
     ],
     "files": [
       "dist/**/*",
-      "electron/**/*"
+      "electron/**/*",
+      "extraResources": [],
+      "npmRebuild": true,
+      "asarUnpack": [
+      "**/node_modules/drivelist/**/*"
     ],
     "win": { "target": "nsis" }
   }
