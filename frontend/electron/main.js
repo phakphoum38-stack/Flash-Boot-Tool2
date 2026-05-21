@@ -1,10 +1,11 @@
 const { app, BrowserWindow, ipcMain, dialog } = require("electron")
-const { spawn } = require("child_process")
+const { spawn, exec } = require("child_process")
+const { promisify } = require("util")
 const path = require("path")
-const drivelist = require("drivelist")
+const execPromise = promisify(exec)
 
 let backend
-let currentFlashProc = null // เก็บ process ไว้สั่ง pause/cancel
+let currentFlashProc = null
 
 function startBackend() {
   let exePath
@@ -42,20 +43,30 @@ ipcMain.handle("select-iso", async () => {
   return result.filePaths[0]
 })
 
-// ดึงรายชื่อ USB
+// ดึงรายชื่อ USB ใช้ PowerShell แทน drivelist
 ipcMain.handle("get-usb-devices", async () => {
-  const drives = await drivelist.list()
-  return drives
-   .filter(d => d.isUSB &&!d.isSystem)
-   .map(d => ({
-      path: d.device,
-      name: d.description,
-      size: d.size,
-      mount: d.mountpoints[0]?.path || ''
+  try {
+    const cmd = `powershell "Get-Disk | Where-Object {$_.BusType -eq 'USB' -and $_.PartitionStyle -ne 'RAW'} | Select-Object Number, FriendlyName, Size | ConvertTo-Json"`
+    const { stdout } = await execPromise(cmd)
+
+    if (!stdout.trim()) return []
+
+    const disks = JSON.parse(stdout)
+    const diskArray = Array.isArray(disks)? disks : [disks]
+
+    return diskArray.map(d => ({
+      path: `\\\\.\\PhysicalDrive${d.Number}`,
+      name: d.FriendlyName,
+      size: parseInt(d.Size),
+      mount: ''
     }))
+  } catch (e) {
+    console.error('Get USB devices failed:', e)
+    return []
+  }
 })
 
-// สั่ง flash - แก้ให้รับ mode
+// สั่ง flash
 ipcMain.handle("flash-iso", async (event, mode, isoPath, device) => {
   console.log("=== Flash Start ===")
   console.log("Mode:", mode)
@@ -69,7 +80,6 @@ ipcMain.handle("flash-iso", async (event, mode, isoPath, device) => {
 
     console.log("Backend Exe Path:", backendExe)
 
-    // ส่ง mode ไปให้ backend ด้วย
     currentFlashProc = spawn(backendExe, [mode, isoPath, device], { windowsHide: true })
 
     currentFlashProc.stdout.on("data", (data) => {
@@ -104,7 +114,7 @@ ipcMain.handle("flash-iso", async (event, mode, isoPath, device) => {
   })
 })
 
-// เพิ่ม 3 ตัวนี้
+// ควบคุม process
 ipcMain.on("cancel-flash", () => {
   if (currentFlashProc) {
     currentFlashProc.kill()
@@ -114,27 +124,27 @@ ipcMain.on("cancel-flash", () => {
 
 ipcMain.on("pause-flash", () => {
   if (currentFlashProc) {
-    currentFlashProc.kill('SIGSTOP') // Linux/Mac
-    // Windows ใช้ taskkill /f /t แต่ต้องใช้ win32-process
-    // ถ้า backend คุณรองรับ pause ให้ส่ง command ไปทาง stdin แทน
+    // Windows ใช้ stdin ส่งคำสั่ง pause ไปให้ backend แทน
+    currentFlashProc.stdin.write("pause\n")
   }
 })
 
 ipcMain.on("resume-flash", () => {
   if (currentFlashProc) {
-    currentFlashProc.kill('SIGCONT')
+    currentFlashProc.stdin.write("resume\n")
   }
 })
 
 const isAdmin = require('is-admin')
 isAdmin().then(admin => {
   if (!admin) {
-    const { spawn } = require('child_process')
     const args = process.argv.slice(1)
-    spawn('powershell', ['Start-Process', process.execPath, '-Verb', 'runAs', '-ArgumentList', args.join(',')], {
-      detached: true,
-      stdio: 'ignore'
-    })
+    spawn('powershell', [
+      'Start-Process',
+      process.execPath,
+      '-Verb', 'runAs',
+      '-ArgumentList', args.join(',')
+    ], { detached: true, stdio: 'ignore' })
     app.quit()
     return
   }
