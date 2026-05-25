@@ -2,8 +2,10 @@ const { app, BrowserWindow, ipcMain, dialog } = require("electron")
 const { spawn, exec } = require("child_process")
 const { promisify } = require("util")
 const path = require("path")
+const isAdmin = require('is-admin')
 const execPromise = promisify(exec)
 
+let mainWindow
 let backend
 let currentFlashProc = null
 
@@ -16,49 +18,82 @@ function startBackend() {
   }
   console.log("Backend:", exePath)
   backend = spawn(exePath, [], { windowsHide: true })
-  backend.stdout.on("data", d => { console.log(d.toString()) })
-  backend.stderr.on("data", d => { console.error(d.toString()) })
+  backend.stdout.on("data", d => console.log("[Backend]", d.toString()))
+  backend.stderr.on("data", d => console.error("[Backend ERR]", d.toString()))
 }
 
 function createWindow() {
-  const win = new BrowserWindow({
+  mainWindow = new BrowserWindow({
     width: 1200,
     height: 800,
     webPreferences: {
       preload: path.join(__dirname, "preload.js"),
-      contextIsolation: true
+      contextIsolation: true,
+      nodeIntegration: false
     }
   })
-  win.loadFile(path.join(__dirname, "../dist/index.html"))
-  win.webContents.openDevTools()
+
+  const devUrl = process.env.VITE_DEV_SERVER_URL
+  if (devUrl) {
+    mainWindow.loadURL(devUrl)
+  } else {
+    mainWindow.loadFile(path.join(__dirname, "../dist/index.html"))
+  }
+
+  mainWindow.webContents.openDevTools()
 }
+
+const runAsAdmin = async () => {
+  const admin = await isAdmin()
+  if (!admin) {
+    const args = process.argv.slice(1).join(',')
+    spawn('powershell', [
+      'Start-Process', process.execPath, '-Verb', 'runAs',
+      '-ArgumentList', args
+    ], { detached: true, stdio: 'ignore' })
+    app.quit()
+    return false
+  }
+  return true
+}
+
+app.whenReady().then(async () => {
+  if (!(await runAsAdmin())) return
+  startBackend()
+  setTimeout(createWindow, 2000)
+})
+
+app.on("will-quit", () => {
+  if (backend) backend.kill()
+  if (currentFlashProc) currentFlashProc.kill()
+})
+
+app.on("window-all-closed", () => {
+  if (process.platform!== 'darwin') app.quit()
+})
 
 // เลือกไฟล์ ISO
 ipcMain.handle("select-iso", async () => {
   const result = await dialog.showOpenDialog({
-    filters: [{ name: "ISO", extensions: ["iso"] }],
+    filters: [{ name: "ISO", extensions: ["iso", "img"] }],
     properties: ["openFile"]
   })
   if (result.canceled) return null
   return result.filePaths[0]
 })
 
-// ดึงรายชื่อ USB ใช้ PowerShell แทน drivelist
+// ดึงรายชื่อ USB
 ipcMain.handle("get-usb-devices", async () => {
   try {
     const cmd = `powershell "Get-Disk | Where-Object {$_.BusType -eq 'USB' -and $_.PartitionStyle -ne 'RAW'} | Select-Object Number, FriendlyName, Size | ConvertTo-Json"`
     const { stdout } = await execPromise(cmd)
-
     if (!stdout.trim()) return []
-
     const disks = JSON.parse(stdout)
     const diskArray = Array.isArray(disks)? disks : [disks]
-
     return diskArray.map(d => ({
       path: `\\\\.\\PhysicalDrive${d.Number}`,
       name: d.FriendlyName,
-      size: parseInt(d.Size),
-      mount: ''
+      size: parseInt(d.Size)
     }))
   } catch (e) {
     console.error('Get USB devices failed:', e)
@@ -68,17 +103,12 @@ ipcMain.handle("get-usb-devices", async () => {
 
 // สั่ง flash
 ipcMain.handle("flash-iso", async (event, mode, isoPath, device) => {
-  console.log("=== Flash Start ===")
-  console.log("Mode:", mode)
-  console.log("ISO Path:", isoPath)
-  console.log("Device:", device)
+  console.log("=== Flash Start ===", { mode, isoPath, device })
 
   return new Promise((resolve) => {
     const backendExe = app.isPackaged
      ? path.join(process.resourcesPath, "backend", "backend.exe")
       : path.join(__dirname, "../../backend/dist/backend.exe")
-
-    console.log("Backend Exe Path:", backendExe)
 
     currentFlashProc = spawn(backendExe, [mode, isoPath, device], { windowsHide: true })
 
@@ -91,7 +121,7 @@ ipcMain.handle("flash-iso", async (event, mode, isoPath, device) => {
         event.sender.send("flash-event", { type: "progress", value: percent })
       }
       if (msg.startsWith("LOG:")) {
-        event.sender.send("flash-event", { type: "log", level: "info", msg: msg.substring(5) })
+        event.sender.send("flash-event", { type: "log", level: "info", msg: msg.substring(4).trim() })
       }
     })
 
@@ -117,45 +147,22 @@ ipcMain.handle("flash-iso", async (event, mode, isoPath, device) => {
 // ควบคุม process
 ipcMain.on("cancel-flash", () => {
   if (currentFlashProc) {
-    currentFlashProc.kill()
+    currentFlashProc.kill('SIGTERM')
     currentFlashProc = null
+    mainWindow.webContents.send("flash-event", { type: "cancelled" })
   }
 })
 
 ipcMain.on("pause-flash", () => {
   if (currentFlashProc) {
-    // Windows ใช้ stdin ส่งคำสั่ง pause ไปให้ backend แทน
     currentFlashProc.stdin.write("pause\n")
+    mainWindow.webContents.send("flash-event", { type: "paused" })
   }
 })
 
 ipcMain.on("resume-flash", () => {
   if (currentFlashProc) {
     currentFlashProc.stdin.write("resume\n")
+    mainWindow.webContents.send("flash-event", { type: "resumed" })
   }
-})
-
-const isAdmin = require('is-admin')
-isAdmin().then(admin => {
-  if (!admin) {
-    const args = process.argv.slice(1)
-    spawn('powershell', [
-      'Start-Process',
-      process.execPath,
-      '-Verb', 'runAs',
-      '-ArgumentList', args.join(',')
-    ], { detached: true, stdio: 'ignore' })
-    app.quit()
-    return
-  }
-
-  app.whenReady().then(() => {
-    startBackend()
-    setTimeout(createWindow, 2000)
-  })
-})
-
-app.on("will-quit", () => {
-  if (backend) backend.kill()
-  if (currentFlashProc) currentFlashProc.kill()
 })
