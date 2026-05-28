@@ -1,59 +1,57 @@
 {
   "name": "flash-boot-tool",
   "version": "1.0.0",
-  "description": "USB ISO Flasher",
   "main": "electron/main.js",
+
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview",
     "dist": "electron-builder"
   },
-  "dependencies": {
-    "react": "^18.2.0",
-    "react-dom": "^18.2.0",
-    "drivelist": "^8.0.0",
-    "is-admin": "^3.0.0"
-  },
-  "devDependencies": {
-    "@vitejs/plugin-react": "^4.0.0",
-    "electron": "^30.0.0",
-    "electron-builder": "^24.13.3",
-    "vite": "^5.0.0"
-  },
+
   "build": {
     "appId": "com.flashboot.tool",
     "productName": "Flash Boot Tool",
+
+    "asar": true,
+
     "directories": {
       "output": "dist"
     },
-    "artifactName": "${productName}-Setup-${version}.${ext}",
+
     "files": [
       "dist/**/*",
       "electron/**/*",
-      "node_modules/**/*"
+      "package.json"
     ],
+
+    "extraResources": [
+      {
+        "from": "resources/backend",
+        "to": "backend"
+      },
+      {
+        "from": "resources/ventoy",
+        "to": "ventoy"
+      }
+    ],
+
     "win": {
-      "target": "nsis",
-      "requestedExecutionLevel": "requireAdministrator",
-      "icon": "build/icon.ico"
+      "target": "nsis"
     },
-    "nsis": {
-      "oneClick": false,
-      "allowToChangeInstallationDirectory": true,
-      "perMachine": true,
-      "runAfterFinish": true
-    },
-    "build": {
-  "extraResources": [
-    {
-      "from": "resources/backend",
-      "to": "backend"
-    },
-    {
-      "from": "resources/ventoy",
-      "to": "ventoy"
+
+    "mac": {
+      "target": "dmg"
     }
-  ]
+  },
+
+  "dependencies": {
+    "electron": "^31.0.0",
+    "is-admin": "^3.0.0"
+  },
+
+  "devDependencies": {
+    "electron-builder": "^24.13.3",
+    "vite": "^5.0.0"
+  }
 }
-แล้วแก้ path ใน Electr
