@@ -44,12 +44,16 @@
       "perMachine": true,
       "runAfterFinish": true
     },
-    "extraResources": [
-      {
-        "from": "./resources",
-        "to": "./resources",
-        "filter": ["**/*"]
-      }
-    ]
-  }
+    "build": {
+  "extraResources": [
+    {
+      "from": "resources/backend",
+      "to": "backend"
+    },
+    {
+      "from": "resources/ventoy",
+      "to": "ventoy"
+    }
+  ]
 }
+แล้วแก้ path ใน Electr
