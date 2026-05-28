@@ -46,13 +46,14 @@
   },
 
   "dependencies": {
-    "electron": "^31.0.0",
-    "is-admin": "^3.0.0"
-  },
+  "react": "^18.3.1",
+  "react-dom": "^18.3.1",
+  "electron": "^31.0.0",
+  "is-admin": "^3.0.0"
+},
 
-  "devDependencies": {
-    "electron-builder": "^24.13.3",
-    "@vitejs/plugin-react": "^4.3.1",
-    "vite": "^5.0.0"
-  }
+"devDependencies": {
+  "vite": "^5.4.0",
+  "@vitejs/plugin-react": "^4.3.1",
+  "electron-builder": "^24.13.3"
 }
