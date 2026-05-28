@@ -2,6 +2,7 @@
   "name": "flash-boot-tool",
   "version": "1.0.0",
   "main": "electron/main.js",
+  "private": true,
 
   "scripts": {
     "dev": "vite",
@@ -46,14 +47,15 @@
   },
 
   "dependencies": {
-  "react": "^18.3.1",
-  "react-dom": "^18.3.1",
-  "electron": "^31.0.0",
-  "is-admin": "^3.0.0"
-},
+    "electron": "^31.0.0",
+    "is-admin": "^3.0.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
 
-"devDependencies": {
-  "vite": "^5.4.0",
-  "@vitejs/plugin-react": "^4.3.1",
-  "electron-builder": "^24.13.3"
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.3.1",
+    "electron-builder": "^24.13.3",
+    "vite": "^5.4.0"
+  }
 }
