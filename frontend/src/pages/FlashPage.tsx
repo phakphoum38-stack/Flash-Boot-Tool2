@@ -26,7 +26,7 @@ function App() {
     }, 3000)
 
     const unsubscribe =
-      window.electron.onFlashEvent((event) => {
+     window.electronAPI.onFlashEvent((event) => {
 
         console.log(event)
 
