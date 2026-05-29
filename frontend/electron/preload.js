@@ -1,153 +1,687 @@
-console.log('preload loaded')
+```js id="q4y0qe"
+const {
+  app,
+  BrowserWindow,
+  ipcMain,
+  dialog
+} = require("electron")
 
 const {
-  contextBridge,
-  ipcRenderer
-} = require('electron')
+  spawn,
+  exec
+} = require("child_process")
 
-contextBridge.exposeInMainWorld(
-  'electronAPI',
-  {
+const {
+  promisify
+} = require("util")
 
-    // =========================
-    // SELECT ISO
-    // =========================
-    selectIso: async () => {
+const path = require("path")
+const fs = require("fs")
+const isAdmin = require("is-admin")
 
-      try {
+const execPromise = promisify(exec)
 
-        return await ipcRenderer.invoke(
-          'select-iso'
-        )
+let mainWindow
+let backend
+let currentFlashProc = null
 
-      } catch (e) {
+// =========================
+// Backend Path
+// =========================
+function getBackendPath() {
 
-        console.error(
-          'selectIso error:',
-          e
-        )
+  if (app.isPackaged) {
 
-        return null
+    return path.join(
+      process.resourcesPath,
+      "backend",
+      "backend.exe"
+    )
+  }
+
+  return path.join(
+    __dirname,
+    "../../backend/dist/backend.exe"
+  )
+}
+
+// =========================
+// Start Backend
+// =========================
+function startBackend() {
+
+  const exePath =
+    getBackendPath()
+
+  console.log("================================")
+  console.log("Backend Path:", exePath)
+  console.log("App Packaged:", app.isPackaged)
+  console.log("Exists:", fs.existsSync(exePath))
+  console.log("Resources Path:", process.resourcesPath)
+  console.log("================================")
+
+  if (!fs.existsSync(exePath)) {
+
+    dialog.showErrorBox(
+      "Backend Error",
+      `backend.exe not found:\n\n${exePath}`
+    )
+
+    return
+  }
+
+  backend = spawn(
+    exePath,
+    [],
+    {
+      windowsHide: true
+    }
+  )
+
+  backend.stdout.on(
+    "data",
+    data => {
+
+      console.log(
+        "[Backend]",
+        data.toString()
+      )
+    }
+  )
+
+  backend.stderr.on(
+    "data",
+    data => {
+
+      console.error(
+        "[Backend ERR]",
+        data.toString()
+      )
+    }
+  )
+
+  backend.on(
+    "error",
+    err => {
+
+      console.error(
+        "SPAWN ERROR:",
+        err
+      )
+
+      dialog.showErrorBox(
+        "Spawn Error",
+        err.message
+      )
+    }
+  )
+
+  backend.on(
+    "close",
+    code => {
+
+      console.log(
+        "Backend exited:",
+        code
+      )
+    }
+  )
+}
+
+// =========================
+// Create Window
+// =========================
+function createWindow() {
+
+  mainWindow =
+    new BrowserWindow({
+
+      width: 1280,
+      height: 720,
+
+      webPreferences: {
+
+        preload: path.join(
+          __dirname,
+          "preload.js"
+        ),
+
+        contextIsolation: true,
+
+        nodeIntegration: false
       }
-    },
+    })
 
-    // =========================
-    // GET USB
-    // =========================
-    getUsbDevices: async () => {
+  const devUrl =
+    process.env.VITE_DEV_SERVER_URL
 
-      try {
+  if (devUrl) {
 
-        return await ipcRenderer.invoke(
-          'get-usb-devices'
-        )
+    mainWindow.loadURL(
+      devUrl
+    )
 
-      } catch (e) {
+  } else {
 
-        console.error(
-          'getUsbDevices error:',
-          e
-        )
+    mainWindow.loadFile(
+      path.join(
+        __dirname,
+        "../dist/index.html"
+      )
+    )
+  }
+
+  mainWindow.webContents.openDevTools()
+}
+
+// =========================
+// Run as Admin
+// =========================
+async function runAsAdmin() {
+
+  const admin =
+    await isAdmin()
+
+  if (!admin) {
+
+    const args =
+      process.argv
+        .slice(1)
+        .join(",")
+
+    spawn(
+      "powershell",
+      [
+        "Start-Process",
+        process.execPath,
+        "-Verb",
+        "runAs",
+        "-ArgumentList",
+        args
+      ],
+      {
+        detached: true,
+        stdio: "ignore"
+      }
+    )
+
+    app.quit()
+
+    return false
+  }
+
+  return true
+}
+
+// =========================
+// App Ready
+// =========================
+app.whenReady().then(
+  async () => {
+
+    if (!(await runAsAdmin())) {
+      return
+    }
+
+    startBackend()
+
+    setTimeout(() => {
+
+      createWindow()
+
+    }, 1500)
+  }
+)
+
+// =========================
+// Cleanup
+// =========================
+app.on(
+  "will-quit",
+  () => {
+
+    if (backend) {
+      backend.kill()
+    }
+
+    if (currentFlashProc) {
+      currentFlashProc.kill()
+    }
+  }
+)
+
+app.on(
+  "window-all-closed",
+  () => {
+
+    if (
+      process.platform !== "darwin"
+    ) {
+
+      app.quit()
+    }
+  }
+)
+
+// =========================
+// Select ISO
+// =========================
+ipcMain.handle(
+  "select-iso",
+  async () => {
+
+    console.log(
+      "SELECT ISO CALLED"
+    )
+
+    const result =
+      await dialog.showOpenDialog({
+
+        title: "Select ISO",
+
+        filters: [
+          {
+            name: "ISO Files",
+            extensions: [
+              "iso",
+              "img"
+            ]
+          }
+        ],
+
+        properties: [
+          "openFile"
+        ]
+      })
+
+    if (result.canceled) {
+      return null
+    }
+
+    return result.filePaths[0]
+  }
+)
+
+// =========================
+// Get USB Devices
+// =========================
+ipcMain.handle(
+  "get-usb-devices",
+  async () => {
+
+    try {
+
+      const cmd = `
+powershell -NoProfile -ExecutionPolicy Bypass "
+Get-CimInstance Win32_DiskDrive |
+Where-Object {
+  $_.InterfaceType -eq 'USB'
+} |
+Select-Object DeviceID, Model, Size |
+ConvertTo-Json -Depth 2
+"
+`
+
+      console.log(
+        "RUN CMD:",
+        cmd
+      )
+
+      const {
+        stdout,
+        stderr
+      } = await execPromise(cmd)
+
+      console.log(
+        "USB STDOUT:",
+        stdout
+      )
+
+      console.log(
+        "USB STDERR:",
+        stderr
+      )
+
+      if (
+        !stdout ||
+        !stdout.trim()
+      ) {
 
         return []
       }
-    },
 
-    // =========================
-    // FLASH ISO
-    // =========================
-    flashIso: async (
+      const disks =
+        JSON.parse(stdout)
+
+      const diskArray =
+        Array.isArray(disks)
+          ? disks
+          : [disks]
+
+      return diskArray.map(
+        d => ({
+          path: d.DeviceID,
+          name:
+            d.Model ||
+            "USB Device",
+          size: Number(
+            d.Size || 0
+          )
+        })
+      )
+
+    } catch (e) {
+
+      console.error(
+        "USB DETECT ERROR:",
+        e
+      )
+
+      return []
+    }
+  }
+)
+
+// =========================
+// Flash ISO
+// =========================
+ipcMain.handle(
+  "flash-iso",
+  async (
+    event,
+    mode,
+    isoPath,
+    device
+  ) => {
+
+    console.log(
+      "=== Flash Start ==="
+    )
+
+    console.log({
       mode,
       isoPath,
       device
-    ) => {
+    })
 
-      try {
+    return new Promise(
+      resolve => {
 
-        return await ipcRenderer.invoke(
-          'flash-iso',
-          mode,
-          isoPath,
-          device
+        const backendExe =
+          getBackendPath()
+
+        console.log(
+          "FLASH BACKEND:",
+          backendExe
         )
 
-      } catch (e) {
-
-        console.error(
-          'flashIso error:',
-          e
+        console.log(
+          "BACKEND EXISTS:",
+          fs.existsSync(
+            backendExe
+          )
         )
 
-        throw e
-      }
-    },
+        if (
+          !fs.existsSync(
+            backendExe
+          )
+        ) {
 
-    // =========================
-    // PAUSE
-    // =========================
-    pauseFlash: () => {
+          event.sender.send(
+            "flash-event",
+            {
+              type: "error",
+              msg:
+                "backend.exe not found"
+            }
+          )
 
-      ipcRenderer.send(
-        'pause-flash'
-      )
-    },
+          resolve({
+            success: false
+          })
 
-    // =========================
-    // RESUME
-    // =========================
-    resumeFlash: () => {
-
-      ipcRenderer.send(
-        'resume-flash'
-      )
-    },
-
-    // =========================
-    // CANCEL
-    // =========================
-    cancelFlash: () => {
-
-      ipcRenderer.send(
-        'cancel-flash'
-      )
-    },
-
-    // =========================
-    // FLASH EVENT
-    // =========================
-    onFlashEvent: (callback) => {
-
-      const listener =
-        (_, data) => {
-
-          callback(data)
+          return
         }
 
-      ipcRenderer.on(
-        'flash-event',
-        listener
-      )
+        currentFlashProc =
+          spawn(
+            backendExe,
+            [
+              mode,
+              isoPath,
+              device
+            ],
+            {
+              windowsHide: true
+            }
+          )
 
-      // unsubscribe
-      return () => {
+        currentFlashProc.stdout.on(
+          "data",
+          data => {
 
-        ipcRenderer.removeListener(
-          'flash-event',
-          listener
+            const msg =
+              data
+                .toString()
+                .trim()
+
+            console.log(
+              "Backend OUT:",
+              msg
+            )
+
+            if (
+              msg.startsWith(
+                "PROGRESS:"
+              )
+            ) {
+
+              const percent =
+                parseInt(
+                  msg.split(
+                    ":"
+                  )[1]
+                )
+
+              event.sender.send(
+                "flash-event",
+                {
+                  type:
+                    "progress",
+                  value:
+                    percent
+                }
+              )
+            }
+
+            if (
+              msg.startsWith(
+                "LOG:"
+              )
+            ) {
+
+              event.sender.send(
+                "flash-event",
+                {
+                  type: "log",
+                  level:
+                    "info",
+                  msg:
+                    msg
+                      .substring(
+                        4
+                      )
+                      .trim()
+                }
+              )
+            }
+          }
+        )
+
+        currentFlashProc.stderr.on(
+          "data",
+          data => {
+
+            const err =
+              data
+                .toString()
+                .trim()
+
+            console.error(
+              "Backend ERR:",
+              err
+            )
+
+            event.sender.send(
+              "flash-event",
+              {
+                type:
+                  "error",
+                msg: err
+              }
+            )
+          }
+        )
+
+        currentFlashProc.on(
+          "error",
+          err => {
+
+            console.error(
+              "FLASH SPAWN ERROR:",
+              err
+            )
+
+            event.sender.send(
+              "flash-event",
+              {
+                type:
+                  "error",
+                msg:
+                  err.message
+              }
+            )
+          }
+        )
+
+        currentFlashProc.on(
+          "close",
+          code => {
+
+            console.log(
+              "Backend Exit Code:",
+              code
+            )
+
+            event.sender.send(
+              "flash-event",
+              {
+                type:
+                  "result",
+
+                success:
+                  code === 0,
+
+                msg:
+                  code === 0
+                    ? "Success"
+                    : "Failed"
+              }
+            )
+
+            currentFlashProc =
+              null
+
+            resolve({
+              success:
+                code === 0
+            })
+          }
         )
       }
-    },
+    )
+  }
+)
 
-    // =========================
-    // REMOVE LISTENER
-    // =========================
-    removeAllListeners: (
-      channel
-    ) => {
+// =========================
+// Cancel Flash
+// =========================
+ipcMain.on(
+  "cancel-flash",
+  () => {
 
-      ipcRenderer.removeAllListeners(
-        channel
+    if (
+      currentFlashProc
+    ) {
+
+      currentFlashProc.kill(
+        "SIGTERM"
+      )
+
+      currentFlashProc =
+        null
+
+      mainWindow.webContents.send(
+        "flash-event",
+        {
+          type:
+            "cancelled"
+        }
       )
     }
   }
 )
+
+// =========================
+// Pause Flash
+// =========================
+ipcMain.on(
+  "pause-flash",
+  () => {
+
+    if (
+      currentFlashProc
+    ) {
+
+      currentFlashProc.stdin.write(
+        "pause\n"
+      )
+
+      mainWindow.webContents.send(
+        "flash-event",
+        {
+          type:
+            "paused"
+        }
+      )
+    }
+  }
+)
+
+// =========================
+// Resume Flash
+// =========================
+ipcMain.on(
+  "resume-flash",
+  () => {
+
+    if (
+      currentFlashProc
+    ) {
+
+      currentFlashProc.stdin.write(
+        "resume\n"
+      )
+
+      mainWindow.webContents.send(
+        "flash-event",
+        {
+          type:
+            "resumed"
+        }
+      )
+    }
+  }
+)
+```
