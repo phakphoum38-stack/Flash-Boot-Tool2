@@ -1,3 +1,7 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+```css
+body{
+  margin:0;
+  background:#2f4f6f;
+  overflow:hidden;
+}
+```
