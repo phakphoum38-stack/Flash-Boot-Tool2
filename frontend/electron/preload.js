@@ -1,4 +1,3 @@
-```js id="q4y0qe"
 const {
   app,
   BrowserWindow,
@@ -684,4 +683,3 @@ ipcMain.on(
     }
   }
 )
-```
