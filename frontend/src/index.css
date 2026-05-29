@@ -1,7 +1,21 @@
-```css
+```css id="y5odto"
 body{
   margin:0;
   background:#2f4f6f;
   overflow:hidden;
+  font-family:Tahoma;
+}
+
+*{
+  box-sizing:border-box;
+}
+
+button{
+  font-family:Tahoma;
+}
+
+input,
+select{
+  outline:none;
 }
 ```
