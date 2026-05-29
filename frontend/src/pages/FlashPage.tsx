@@ -1,121 +1,548 @@
 import { useState, useEffect } from 'react'
 
-export default function FlashPage() {
-  const [isoPath, setIsoPath] = useState('')
-  const [devices, setDevices] = useState([])
-  const [selectedDevice, setSelectedDevice] = useState('')
+function App() {
+
   const [mode, setMode] = useState('dd')
+  const [isoPath, setIsoPath] = useState('')
+  const [device, setDevice] = useState('')
+  const [usbDevices, setUsbDevices] = useState([])
+
   const [progress, setProgress] = useState(0)
   const [status, setStatus] = useState('idle')
-  const [msg, setMsg] = useState('')
 
+  const [logs, setLogs] = useState([])
+
+  const [isPaused, setIsPaused] = useState(false)
+
+  // =========================
+  // LOAD USB
+  // =========================
   useEffect(() => {
-    loadDevices()
-    window.electronAPI.onFlashEvent((event) => {
-      if (event.type === 'progress') setProgress(event.value)
-      if (event.type === 'result') {
-        setStatus(event.success ? 'success' : 'failed')
-        setMsg(event.message || '')
-      }
-      if (event.type === 'paused') setStatus('paused')
-      if (event.type === 'resumed') setStatus('flashing')
-      if (event.type === 'cancelled') {
-        setStatus('idle')
-        setProgress(0)
-        setMsg('ยกเลิกแล้ว')
-      }
-    })
+
+    loadUsbDevices()
+
+    const interval = setInterval(() => {
+      loadUsbDevices()
+    }, 3000)
+
+    const unsubscribe =
+      window.electron.onFlashEvent((event) => {
+
+        console.log(event)
+
+        // progress
+        if (event.type === 'progress') {
+          setProgress(event.value)
+        }
+
+        // logs
+        if (event.type === 'log') {
+          addLog(event.msg)
+        }
+
+        // paused
+        if (event.type === 'paused') {
+          setIsPaused(true)
+          addLog('Flash paused')
+        }
+
+        // resumed
+        if (event.type === 'resumed') {
+          setIsPaused(false)
+          addLog('Flash resumed')
+        }
+
+        // cancelled
+        if (event.type === 'cancelled') {
+          setStatus('idle')
+          setProgress(0)
+          setIsPaused(false)
+
+          addLog('Flash cancelled')
+        }
+
+        // error
+        if (event.type === 'error') {
+
+          setStatus('error')
+
+          setIsPaused(false)
+
+          addLog('ERROR: ' + event.msg)
+
+          alert('Error: ' + event.msg)
+        }
+
+        // done
+        if (event.type === 'result') {
+
+          setStatus(
+            event.success
+              ? 'done'
+              : 'error'
+          )
+
+          setIsPaused(false)
+
+          if (event.success) {
+
+            addLog('Flash completed successfully')
+
+            alert(
+              'Flash เสร็จแล้ว!'
+            )
+
+          } else {
+
+            addLog('Flash failed')
+          }
+        }
+      })
+
+    return () => {
+
+      clearInterval(interval)
+
+      unsubscribe()
+    }
+
   }, [])
 
-  const loadDevices = async () => {
-    const devs = await window.electronAPI.getUsbDevices()
-    setDevices(devs)
+  // =========================
+  // LOAD USB
+  // =========================
+  const loadUsbDevices = async () => {
+
+    try {
+
+      const devices =
+        await window.electron.getUsbDevices()
+
+      setUsbDevices(devices)
+
+    } catch (e) {
+
+      console.error(e)
+    }
   }
 
-  const selectIso = async () => {
-    const path = await window.electronAPI.selectIso()
-    if (path) setIsoPath(path)
+  // =========================
+  // LOGS
+  // =========================
+  const addLog = (msg) => {
+
+    const time =
+      new Date().toLocaleTimeString()
+
+    setLogs(prev => [
+      ...prev,
+      `[${time}] ${msg}`
+    ])
   }
 
-  const startFlash = async () => {
-    if (!isoPath || !selectedDevice) return
+  // =========================
+  // SELECT ISO
+  // =========================
+  const handleSelectIso = async () => {
+
+    const filePath =
+      await window.electron.selectIsoFile()
+
+    if (filePath) {
+
+      setIsoPath(filePath)
+
+      addLog(
+        'Selected ISO: ' + filePath
+      )
+    }
+  }
+
+  // =========================
+  // FLASH
+  // =========================
+  const handleFlash = async () => {
+
+    if (!isoPath || !device) {
+
+      return alert(
+        'เลือกไฟล์ ISO และ USB ก่อน'
+      )
+    }
+
+    const confirmFlash =
+      confirm(
+        'ข้อมูลใน USB จะถูกลบทั้งหมด ดำเนินการต่อหรือไม่?'
+      )
+
+    if (!confirmFlash) {
+      return
+    }
+
     setStatus('flashing')
+
     setProgress(0)
-    setMsg('')
-    await window.electronAPI.flashIso(mode, isoPath, selectedDevice)
+
+    setLogs([])
+
+    addLog('Starting flash process...')
+    addLog('Mode: ' + mode)
+    addLog('ISO: ' + isoPath)
+    addLog('USB: ' + device)
+
+    try {
+
+      await window.electron.flashIso(
+        mode,
+        isoPath,
+        device
+      )
+
+    } catch (e) {
+
+      console.error(e)
+    }
   }
 
-  const pauseFlash = () => window.electronAPI.pauseFlash()
-  const resumeFlash = () => window.electronAPI.resumeFlash()
-  const cancelFlash = () => window.electronAPI.cancelFlash()
+  // =========================
+  // CANCEL
+  // =========================
+  const handleCancel = async () => {
 
+    await window.electron.cancelFlash()
+
+    setStatus('idle')
+
+    setProgress(0)
+
+    setIsPaused(false)
+  }
+
+  // =========================
+  // PAUSE
+  // =========================
+  const handlePause = async () => {
+
+    if (isPaused) {
+
+      await window.electron.resumeFlash()
+
+    } else {
+
+      await window.electron.pauseFlash()
+    }
+
+    setIsPaused(!isPaused)
+  }
+
+  const isFlashing =
+    status === 'flashing'
+
+  // =========================
+  // TAB STYLE
+  // =========================
+  const tabStyle = (active) => ({
+    padding: '10px 20px',
+    marginRight: 10,
+    border: '2px solid #555',
+    background: active
+      ? '#004cff'
+      : '#d9d9d9',
+    color: active
+      ? 'white'
+      : 'black',
+    cursor: 'pointer',
+    fontWeight: 'bold',
+    fontSize: 16
+  })
+
+  // =========================
+  // BUTTON STYLE
+  // =========================
+  const buttonStyle = {
+    padding: '12px 20px',
+    fontWeight: 'bold',
+    fontSize: 16,
+    cursor: 'pointer',
+    border: '2px solid #444',
+    background:
+      'linear-gradient(#fff,#d0d0d0)'
+  }
+
+  // =========================
+  // UI
+  // =========================
   return (
-    <div style={{padding: '20px', fontFamily: 'sans-serif', maxWidth: '600px', margin: '0 auto'}}>
-      <h1>Flash Boot Tool</h1>
-      
-      <button onClick={selectIso} style={{padding: '8px 16px', marginBottom: '10px'}}>
-        Select ISO
-      </button>
-      <p style={{wordBreak: 'break-all'}}>{isoPath || 'ยังไม่ได้เลือกไฟล์ ISO'}</p>
 
-      <label>โหมด Flash:</label>
-      <select 
-        value={mode} 
-        onChange={(e) => setMode(e.target.value)}
-        style={{padding: '8px', width: '100%', marginBottom: '10px'}}
-      >
-        <option value="dd">DD Mode - เร็ว, เขียนตรงๆ</option>
-        <option value="smart">Smart Mode - ตรวจสอบก่อนเขียน</option>
-        <option value="ventoy">Ventoy Mode - ทำ Ventoy USB</option>
-      </select>
+    <div style={{
+      minHeight: '100vh',
+      background: '#2f4f6f',
+      padding: 20,
+      fontFamily: 'Tahoma'
+    }}>
 
-      <label>เลือก USB:</label>
-      <select 
-        value={selectedDevice} 
-        onChange={(e) => setSelectedDevice(e.target.value)}
-        style={{padding: '8px', width: '100%', marginBottom: '10px'}}
-      >
-        <option value="">เลือก USB</option>
-        {devices.map(d => (
-          <option key={d.path} value={d.path}>
-            {d.name} - {(d.size / 1024 / 1024 / 1024).toFixed(1)}GB
-          </option>
-        ))}
-      </select>
+      <div style={{
+        width: 1400,
+        margin: '0 auto',
+        background: '#d6d6d6',
+        border: '3px solid #777',
+        boxShadow:
+          '0 0 20px rgba(0,0,0,.5)'
+      }}>
 
-      <div style={{display: 'flex', gap: '10px', marginBottom: '10px'}}>
-        <button 
-          onClick={startFlash} 
-          disabled={!isoPath || !selectedDevice || status === 'flashing'}
-          style={{padding: '10px 20px', flex: 1}}
-        >
-          {status === 'flashing' ? `กำลัง Flash... ${progress}%` : 'Start Flash'}
-        </button>
+        {/* TITLE BAR */}
+        <div style={{
+          height: 40,
+          background:
+            'linear-gradient(#003c8f,#0b57d0)',
+          color: 'white',
+          display: 'flex',
+          alignItems: 'center',
+          paddingLeft: 15,
+          fontWeight: 'bold',
+          fontSize: 20
+        }}>
+          Flash Boot Tool v3.11
+        </div>
 
-        {status === 'flashing' && (
-          <>
-            <button onClick={pauseFlash} style={{padding: '10px 20px'}}>Pause</button>
-            <button onClick={cancelFlash} style={{padding: '10px 20px', background: '#ff4d4d', color: 'white'}}>Cancel</button>
-          </>
-        )}
+        {/* CONTENT */}
+        <div style={{
+          display: 'flex',
+          gap: 20,
+          padding: 20
+        }}>
 
-        {status === 'paused' && (
-          <>
-            <button onClick={resumeFlash} style={{padding: '10px 20px', background: '#4CAF50', color: 'white'}}>Resume</button>
-            <button onClick={cancelFlash} style={{padding: '10px 20px', background: '#ff4d4d', color: 'white'}}>Cancel</button>
-          </>
-        )}
+          {/* LEFT PANEL */}
+          <div style={{ width: 340 }}>
+
+            {/* MODE */}
+            <div style={{
+              marginBottom: 20
+            }}>
+
+              <button
+                onClick={() => setMode('dd')}
+                style={tabStyle(mode === 'dd')}
+              >
+                DD
+              </button>
+
+              <button
+                onClick={() => setMode('smart')}
+                style={tabStyle(mode === 'smart')}
+              >
+                SMART
+              </button>
+
+              <button
+                onClick={() => setMode('ventoy')}
+                style={tabStyle(mode === 'ventoy')}
+              >
+                VENTOY
+              </button>
+
+            </div>
+
+            {/* ISO */}
+            <div style={{
+              border: '2px solid #999',
+              padding: 15,
+              marginBottom: 20,
+              background: '#eee'
+            }}>
+
+              <h3>Select ISO File</h3>
+
+              <input
+                type="text"
+                value={isoPath}
+                readOnly
+                style={{
+                  width: '100%',
+                  height: 35,
+                  marginBottom: 10
+                }}
+              />
+
+              <button
+                onClick={handleSelectIso}
+                disabled={isFlashing}
+                style={buttonStyle}
+              >
+                Browse ISO
+              </button>
+
+            </div>
+
+            {/* USB */}
+            <div style={{
+              border: '2px solid #999',
+              padding: 15,
+              marginBottom: 20,
+              background: '#eee'
+            }}>
+
+              <h3>USB Drive</h3>
+
+              <select
+                value={device}
+                onChange={(e) =>
+                  setDevice(e.target.value)
+                }
+                style={{
+                  width: '100%',
+                  height: 40
+                }}
+              >
+
+                <option value="">
+                  -- Select USB --
+                </option>
+
+                {usbDevices.map((d) => (
+
+                  <option
+                    key={d.path}
+                    value={d.path}
+                  >
+                    {d.name}
+                    {' '}
+                    (
+                    {(d.size / 1024 / 1024 / 1024)
+                      .toFixed(1)}
+                    GB)
+                  </option>
+
+                ))}
+
+              </select>
+
+            </div>
+
+            {/* BUTTONS */}
+            <div style={{
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 10
+            }}>
+
+              <button
+                onClick={handleFlash}
+                disabled={
+                  isFlashing ||
+                  !isoPath ||
+                  !device
+                }
+                style={buttonStyle}
+              >
+                START FLASH
+              </button>
+
+              {isFlashing && (
+
+                <>
+                  <button
+                    onClick={handlePause}
+                    style={buttonStyle}
+                  >
+                    {isPaused
+                      ? 'RESUME'
+                      : 'PAUSE'}
+                  </button>
+
+                  <button
+                    onClick={handleCancel}
+                    style={{
+                      ...buttonStyle,
+                      color: 'red'
+                    }}
+                  >
+                    CANCEL
+                  </button>
+                </>
+              )}
+
+            </div>
+
+          </div>
+
+          {/* CENTER */}
+          <div style={{ flex: 1 }}>
+
+            <div style={{
+              background: 'black',
+              color: '#00ff00',
+              height: 550,
+              overflow: 'auto',
+              padding: 20,
+              border: '4px solid #555',
+              fontFamily: 'Consolas',
+              fontSize: 18
+            }}>
+
+              <div style={{
+                color: '#00ffff',
+                marginBottom: 20,
+                fontSize: 28
+              }}>
+                FLASH CONSOLE
+              </div>
+
+              {logs.map((log, index) => (
+
+                <div key={index}>
+                  {log}
+                </div>
+
+              ))}
+
+            </div>
+
+            {/* PROGRESS */}
+            <div style={{
+              marginTop: 20
+            }}>
+
+              <div style={{
+                width: '100%',
+                height: 40,
+                border: '2px solid #333',
+                background: '#111'
+              }}>
+
+                <div style={{
+                  width: `${progress}%`,
+                  height: '100%',
+                  background:
+                    isPaused
+                      ? 'orange'
+                      : '#00ff66',
+                  transition:
+                    'width .3s'
+                }} />
+
+              </div>
+
+              <div style={{
+                marginTop: 10,
+                fontWeight: 'bold'
+              }}>
+                {progress}%
+                {' '}
+                {isPaused && '(Paused)'}
+              </div>
+
+            </div>
+
+          </div>
+
+        </div>
+
       </div>
 
-      {progress > 0 && (
-        <div style={{background: '#eee', borderRadius: '4px', overflow: 'hidden', marginBottom: '10px'}}>
-          <div style={{width: `${progress}%`, background: '#4CAF50', height: '20px', transition: 'width 0.3s'}}></div>
-        </div>
-      )}
-
-      {status === 'success' && <p style={{color: 'green'}}>✅ Flash สำเร็จ! {msg}</p>}
-      {status === 'failed' && <p style={{color: 'red'}}>❌ Flash ไม่สำเร็จ! {msg}</p>}
-      {status === 'paused' && <p style={{color: 'orange'}}>⏸️ หยุดชั่วคราว</p>}
     </div>
   )
 }
+
+export default App
+```
