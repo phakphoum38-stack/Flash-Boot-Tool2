@@ -143,10 +143,12 @@ function App() {
   // =========================
   // SELECT ISO
   // =========================
-  const handleSelectIso = async () => {
+const handleSelectIso = async () => {
+
+  try {
 
     const filePath =
-      await window.electron.selectIsoFile()
+      await window.electron.selectIso()
 
     if (filePath) {
 
@@ -156,7 +158,14 @@ function App() {
         'Selected ISO: ' + filePath
       )
     }
+
+  } catch (e) {
+
+    console.error(e)
+
+    alert('Cannot select ISO')
   }
+}
 
   // =========================
   // FLASH
