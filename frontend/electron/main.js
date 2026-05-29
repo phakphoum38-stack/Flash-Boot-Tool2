@@ -172,24 +172,48 @@ app.on("window-all-closed", () => {
 // =========================
 // Select ISO
 // =========================
-ipcMain.handle("select-iso", async () => {
-  const result = await dialog.showOpenDialog({
-    filters: [
-      {
-        name: "ISO",
-        extensions: ["iso", "img"]
-      }
-    ],
+const {
+  app,
+  BrowserWindow,
+  ipcMain,
+  dialog
+} = require('electron')
 
-    properties: ["openFile"]
-  })
+ipcMain.handle(
+  'select-iso',
+  async () => {
 
-  if (result.canceled) {
-    return null
+    console.log(
+      'SELECT ISO CALLED'
+    )
+
+    const result =
+      await dialog.showOpenDialog({
+
+        title: 'Select ISO',
+
+        filters: [
+          {
+            name: 'ISO Files',
+            extensions: [
+              'iso',
+              'img'
+            ]
+          }
+        ],
+
+        properties: [
+          'openFile'
+        ]
+      })
+
+    if (result.canceled) {
+      return null
+    }
+
+    return result.filePaths[0]
   }
-
-  return result.filePaths[0]
-})
+)
 
 // =========================
 // Get USB Devices
