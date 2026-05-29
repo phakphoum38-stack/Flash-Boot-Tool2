@@ -1,4 +1,3 @@
-
 const {
   app,
   BrowserWindow,
@@ -22,7 +21,7 @@ const isAdmin = require("is-admin")
 const execPromise = promisify(exec)
 
 let mainWindow
-let backend
+let backend = null
 let currentFlashProc = null
 
 // =========================
@@ -148,7 +147,9 @@ function createWindow() {
 
         contextIsolation: true,
 
-        nodeIntegration: false
+        nodeIntegration: false,
+
+        sandbox: false
       }
     })
 
@@ -187,7 +188,7 @@ async function runAsAdmin() {
     const args =
       process.argv
         .slice(1)
-        .join(",")
+        .join(" ")
 
     spawn(
       "powershell",
@@ -197,7 +198,7 @@ async function runAsAdmin() {
         "-Verb",
         "runAs",
         "-ArgumentList",
-        args
+        `"${args}"`
       ],
       {
         detached: true,
@@ -229,7 +230,7 @@ app.whenReady().then(
 
       createWindow()
 
-    }, 1500)
+    }, 1000)
   }
 )
 
@@ -275,24 +276,27 @@ ipcMain.handle(
     )
 
     const result =
-      await dialog.showOpenDialog({
+      await dialog.showOpenDialog(
+        mainWindow,
+        {
 
-        title: "Select ISO",
+          title: "Select ISO",
 
-        filters: [
-          {
-            name: "ISO Files",
-            extensions: [
-              "iso",
-              "img"
-            ]
-          }
-        ],
+          filters: [
+            {
+              name: "ISO Files",
+              extensions: [
+                "iso",
+                "img"
+              ]
+            }
+          ],
 
-        properties: [
-          "openFile"
-        ]
-      })
+          properties: [
+            "openFile"
+          ]
+        }
+      )
 
     if (result.canceled) {
       return null
@@ -360,13 +364,18 @@ ConvertTo-Json -Depth 2
 
       return diskArray.map(
         d => ({
-          path: d.DeviceID,
+
+          path:
+            d.DeviceID,
+
           name:
             d.Model ||
             "USB Device",
-          size: Number(
-            d.Size || 0
-          )
+
+          size:
+            Number(
+              d.Size || 0
+            )
         })
       )
 
@@ -461,60 +470,71 @@ ipcMain.handle(
           "data",
           data => {
 
-            const msg =
+            const lines =
               data
                 .toString()
-                .trim()
+                .split("\n")
+                .filter(Boolean)
 
-            console.log(
-              "Backend OUT:",
-              msg
-            )
+            for (const line of lines) {
 
-            if (
-              msg.startsWith(
-                "PROGRESS:"
+              const msg =
+                line.trim()
+
+              console.log(
+                "Backend OUT:",
+                msg
               )
-            ) {
 
-              const percent =
-                parseInt(
-                  msg.split(
-                    ":"
-                  )[1]
+              if (
+                msg.startsWith(
+                  "PROGRESS:"
                 )
+              ) {
 
-              event.sender.send(
-                "flash-event",
-                {
-                  type:
-                    "progress",
-                  value:
-                    percent
-                }
-              )
-            }
+                const percent =
+                  parseInt(
+                    msg.split(
+                      ":"
+                    )[1]
+                  )
 
-            if (
-              msg.startsWith(
-                "LOG:"
-              )
-            ) {
+                event.sender.send(
+                  "flash-event",
+                  {
+                    type:
+                      "progress",
 
-              event.sender.send(
-                "flash-event",
-                {
-                  type: "log",
-                  level:
-                    "info",
-                  msg:
-                    msg
-                      .substring(
-                        4
-                      )
-                      .trim()
-                }
-              )
+                    value:
+                      percent
+                  }
+                )
+              }
+
+              if (
+                msg.startsWith(
+                  "LOG:"
+                )
+              ) {
+
+                event.sender.send(
+                  "flash-event",
+                  {
+                    type:
+                      "log",
+
+                    level:
+                      "info",
+
+                    msg:
+                      msg
+                        .substring(
+                          4
+                        )
+                        .trim()
+                  }
+                )
+              }
             }
           }
         )
@@ -538,7 +558,9 @@ ipcMain.handle(
               {
                 type:
                   "error",
-                msg: err
+
+                msg:
+                  err
               }
             )
           }
@@ -558,6 +580,7 @@ ipcMain.handle(
               {
                 type:
                   "error",
+
                 msg:
                   err.message
               }
@@ -615,9 +638,7 @@ ipcMain.on(
       currentFlashProc
     ) {
 
-      currentFlashProc.kill(
-        "SIGTERM"
-      )
+      currentFlashProc.kill()
 
       currentFlashProc =
         null
@@ -644,10 +665,6 @@ ipcMain.on(
       currentFlashProc
     ) {
 
-      currentFlashProc.stdin.write(
-        "pause\n"
-      )
-
       mainWindow.webContents.send(
         "flash-event",
         {
@@ -669,10 +686,6 @@ ipcMain.on(
     if (
       currentFlashProc
     ) {
-
-      currentFlashProc.stdin.write(
-        "resume\n"
-      )
 
       mainWindow.webContents.send(
         "flash-event",
