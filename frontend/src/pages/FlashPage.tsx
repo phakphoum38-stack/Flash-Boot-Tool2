@@ -116,7 +116,7 @@ function App() {
     try {
 
       const devices =
-        await window.electron.getUsbDevices()
+        await window.electronAPI.getUsbDevices()
 
       setUsbDevices(devices)
 
@@ -148,7 +148,7 @@ const handleSelectIso = async () => {
   try {
 
     const filePath =
-      await window.electron.selectIso()
+      await window.electronAPI.selectIso()
 
     if (filePath) {
 
@@ -201,7 +201,7 @@ const handleSelectIso = async () => {
 
     try {
 
-      await window.electron.flashIso(
+      await window.electronAPI.flashIso(
         mode,
         isoPath,
         device
@@ -218,7 +218,7 @@ const handleSelectIso = async () => {
   // =========================
   const handleCancel = async () => {
 
-    await window.electron.cancelFlash()
+    await window.electronAPI.cancelFlash()
 
     setStatus('idle')
 
@@ -234,11 +234,11 @@ const handleSelectIso = async () => {
 
     if (isPaused) {
 
-      await window.electron.resumeFlash()
+      await window.electronAPI.resumeFlash()
 
     } else {
 
-      await window.electron.pauseFlash()
+      await window.electronAPI.pauseFlash()
     }
 
     setIsPaused(!isPaused)
