@@ -1,4 +1,3 @@
-```js
 console.log('preload loaded')
 
 const {
@@ -152,4 +151,3 @@ contextBridge.exposeInMainWorld(
     }
   }
 )
-```
