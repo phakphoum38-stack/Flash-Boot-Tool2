@@ -267,6 +267,7 @@ app.on(
 // =========================
 // Select ISO
 // =========================
+console.log("REGISTER SELECT ISO")
 ipcMain.handle("select-iso", async () => {
 
   console.log("SELECT ISO CALLED")
