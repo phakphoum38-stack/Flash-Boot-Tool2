@@ -1,4 +1,9 @@
-```jsx id="pdjlwm"
+function App() {
+
+  console.log("APP JSX LOADED")
+
+  ...
+}
 import { useState, useEffect } from 'react'
 
 function App() {
