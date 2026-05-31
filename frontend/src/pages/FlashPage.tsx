@@ -145,10 +145,17 @@ function App() {
   // =========================
 const handleSelectIso = async () => {
 
+  console.log("BROWSE CLICK")
+
   try {
 
     const filePath =
       await window.electronAPI.selectIso()
+
+    console.log(
+      "SELECT RESULT:",
+      filePath
+    )
 
     if (filePath) {
 
@@ -161,9 +168,14 @@ const handleSelectIso = async () => {
 
   } catch (e) {
 
-    console.error(e)
+    console.error(
+      "SELECT ISO ERROR:",
+      e
+    )
 
-    alert('Cannot select ISO')
+    alert(
+      "Cannot select ISO"
+    )
   }
 }
 
