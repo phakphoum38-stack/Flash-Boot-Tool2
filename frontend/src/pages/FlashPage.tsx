@@ -1,4 +1,3 @@
-console.log("FLASH PAGE LOADED")
 import { useState, useEffect } from 'react'
 
 function App() {
@@ -567,4 +566,3 @@ const handleSelectIso = async () => {
 }
 
 export default App
-```
