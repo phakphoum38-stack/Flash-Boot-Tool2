@@ -267,44 +267,40 @@ app.on(
 // =========================
 // Select ISO
 // =========================
-ipcMain.handle(
-  "select-iso",
-  async () => {
+ipcMain.handle("select-iso", async () => {
 
-    console.log(
-      "SELECT ISO CALLED"
-    )
+  console.log("SELECT ISO CALLED")
+
+  try {
 
     const result =
       await dialog.showOpenDialog(
         mainWindow,
         {
-
           title: "Select ISO",
-
+          properties: ["openFile"],
           filters: [
             {
               name: "ISO Files",
-              extensions: [
-                "iso",
-                "img"
-              ]
+              extensions: ["iso", "img"]
             }
-          ],
-
-          properties: [
-            "openFile"
           ]
         }
       )
 
-    if (result.canceled) {
-      return null
-    }
+    console.log(result)
 
-    return result.filePaths[0]
+    return result.canceled
+      ? null
+      : result.filePaths[0]
+
+  } catch (err) {
+
+    console.error(err)
+
+    return null
   }
-)
+})
 
 // =========================
 // Get USB Devices
