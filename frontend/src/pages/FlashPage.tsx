@@ -386,8 +386,8 @@ const handleSelectIso = async () => {
               />
 
               <button
-                onClick={handleSelectIso}
-                disabled={isFlashing}
+                type="button"
+                onClick={() => handleSelectIso()}
                 style={buttonStyle}
               >
                 Browse ISO
