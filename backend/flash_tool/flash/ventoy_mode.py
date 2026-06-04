@@ -22,11 +22,40 @@ def ventoy_flash(iso_path: Path, device_path: str, emit):
     
     emit("progress", value=100, written=iso_path.stat().st_size, total=iso_path.stat().st_size)
     emit("log", level="info", msg="Ventoy flash completed")
-    emit("result", success=True, msg="Ventoy flash completed")
 
 def install_ventoy(device_num: str, emit):
     import subprocess
-    ventoy_exe = Path(__file__).parent.parent / "resources" / "ventoy" / "Ventoy2Disk.exe"
+    ventoy_dir = (
+Path(**file**).parent.parent
+/ "resources"
+/ "ventoy"
+)
+
+candidates = [
+ventoy_dir / "Ventoy2Disk_X64.exe",
+ventoy_dir / "Ventoy2Disk.exe"
+]
+
+ventoy_exe = None
+
+for exe in candidates:
+
+```
+if exe.exists():
+
+    ventoy_exe = exe
+
+    break
+```
+
+if ventoy_exe is None:
+
+```
+raise FileNotFoundError(
+    "Ventoy executable not found"
+)
+```
+
     
     if not ventoy_exe.exists():
         raise FileNotFoundError("Ventoy2Disk.exe not found in resources")
