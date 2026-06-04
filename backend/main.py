@@ -5,14 +5,14 @@ from flash_tool.flash.dd_flash import dd_flash
 from flash_tool.flash.smart_flash import smart_flash
 
 try:
-from flash_tool.flash.ventoy_mode import ventoy_flash
-except:
-ventoy_flash = None
+    from flash_tool.flash.ventoy_mode import ventoy_flash
+except Exception:
+    ventoy_flash = None
 
 try:
-from flash_tool.flash.etcher_flash import etcher_flash
-except:
-etcher_flash = None
+    from flash_tool.flash.etcher_flash import etcher_flash
+except Exception:
+    etcher_flash = None
 
 # =========================
 
