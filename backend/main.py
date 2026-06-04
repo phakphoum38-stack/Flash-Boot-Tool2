@@ -22,7 +22,6 @@ except Exception:
 
 def emit(event_type, **kwargs):
 
-```
 if event_type == "progress":
 
     value = kwargs.get("value", 0)
@@ -56,7 +55,6 @@ elif event_type == "error":
         file=sys.stderr,
         flush=True
     )
-```
 
 # =========================
 
@@ -66,7 +64,6 @@ elif event_type == "error":
 
 def main():
 
-```
 if len(sys.argv) < 4:
 
     emit(
@@ -188,7 +185,6 @@ except Exception as e:
     )
 
     sys.exit(1)
-```
 
 if **name** == "**main**":
 main()
