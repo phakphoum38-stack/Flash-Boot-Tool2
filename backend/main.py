@@ -5,20 +5,14 @@ from flash_tool.flash.dd_flash import dd_flash
 from flash_tool.flash.smart_flash import smart_flash
 
 try:
-    from flash_tool.flash.ventoy_mode import ventoy_flash
+from flash_tool.flash.ventoy_mode import ventoy_flash
 except Exception:
-    ventoy_flash = None
+ventoy_flash = None
 
 try:
-    from flash_tool.flash.etcher_flash import etcher_flash
+from flash_tool.flash.etcher_flash import etcher_flash
 except Exception:
-    etcher_flash = None
-
-# =========================
-
-# Emit
-
-# =========================
+etcher_flash = None
 
 def emit(event_type, **kwargs):
 
@@ -56,38 +50,20 @@ elif event_type == "error":
         flush=True
     )
 
-# =========================
-
-# Main
-
-# =========================
-
 def main():
 
 if len(sys.argv) < 4:
 
     emit(
         "error",
-        msg=(
-            "Usage: "
-            "backend.exe "
-            "<mode> "
-            "<iso> "
-            "<device>"
-        )
+        msg="Usage: backend.exe <mode> <iso> <device>"
     )
 
     sys.exit(1)
 
-mode = (
-    sys.argv[1]
-    .lower()
-    .strip()
-)
+mode = sys.argv[1].lower().strip()
 
-iso_path = Path(
-    sys.argv[2]
-)
+iso_path = Path(sys.argv[2])
 
 device = sys.argv[3]
 
@@ -108,9 +84,6 @@ emit(
 
 try:
 
-    # =========================
-    # DD
-    # =========================
     if mode == "dd":
 
         dd_flash(
@@ -119,9 +92,6 @@ try:
             emit
         )
 
-    # =========================
-    # SMART
-    # =========================
     elif mode == "smart":
 
         smart_flash(
@@ -130,9 +100,6 @@ try:
             emit
         )
 
-    # =========================
-    # VENTOY
-    # =========================
     elif mode == "ventoy":
 
         if ventoy_flash is None:
@@ -147,9 +114,6 @@ try:
             emit
         )
 
-    # =========================
-    # ETCHER
-    # =========================
     elif mode == "etcher":
 
         if etcher_flash is None:
