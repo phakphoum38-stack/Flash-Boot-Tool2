@@ -1,68 +1,194 @@
 import sys
-import json
-import os
+from pathlib import Path
+
+from flash_tool.flash.dd_flash import dd_flash
+from flash_tool.flash.smart_flash import smart_flash
+
 try:
-    import win32file
-    import win32api
-except ImportError:
-    print(json.dumps({"success": False, "error": "pywin32 not installed"}))
+from flash_tool.flash.ventoy_mode import ventoy_flash
+except:
+ventoy_flash = None
+
+try:
+from flash_tool.flash.etcher_flash import etcher_flash
+except:
+etcher_flash = None
+
+# =========================
+
+# Emit
+
+# =========================
+
+def emit(event_type, **kwargs):
+
+```
+if event_type == "progress":
+
+    value = kwargs.get("value", 0)
+
+    print(
+        f"PROGRESS:{value}",
+        flush=True
+    )
+
+elif event_type == "log":
+
+    msg = kwargs.get(
+        "msg",
+        ""
+    )
+
+    print(
+        f"LOG:{msg}",
+        flush=True
+    )
+
+elif event_type == "error":
+
+    msg = kwargs.get(
+        "msg",
+        "Unknown Error"
+    )
+
+    print(
+        msg,
+        file=sys.stderr,
+        flush=True
+    )
+```
+
+# =========================
+
+# Main
+
+# =========================
+
+def main():
+
+```
+if len(sys.argv) < 4:
+
+    emit(
+        "error",
+        msg=(
+            "Usage: "
+            "backend.exe "
+            "<mode> "
+            "<iso> "
+            "<device>"
+        )
+    )
+
     sys.exit(1)
 
-CHUNK_SIZE = 4 * 1024 * 1024 # 4MB
+mode = (
+    sys.argv[1]
+    .lower()
+    .strip()
+)
 
-def flash_iso(iso_path, device_path):
-    try:
-        if not os.path.exists(iso_path):
-            return {"success": False, "error": "ISO file not found"}
+iso_path = Path(
+    sys.argv[2]
+)
 
-        iso_size = os.path.getsize(iso_path)
+device = sys.argv[3]
 
-        # เปิดไฟล์ ISO
-        with open(iso_path, 'rb') as iso_file:
-            # เปิด device สำหรับเขียน - ไม่ต้องใส่ \\.\ ซ้ำ
-            try:
-                handle = win32file.CreateFileW(
-                    device_path, # ใช้ตรงๆเลย
-                    win32file.GENERIC_WRITE,
-                    0,
-                    None,
-                    win32file.OPEN_EXISTING,
-                    win32file.FILE_FLAG_NO_BUFFERING,
-                    None
-                )
-            except Exception as e:
-                return {"success": False, "error": f"Cannot open device: {str(e)}. Run as Administrator?"}
+emit(
+    "log",
+    msg=f"Mode = {mode}"
+)
 
-            written_total = 0
-            while True:
-                chunk = iso_file.read(CHUNK_SIZE)
-                if not chunk:
-                    break
+emit(
+    "log",
+    msg=f"ISO = {iso_path}"
+)
 
-                try:
-                    win32file.WriteFile(handle, chunk)
-                except Exception as e:
-                    win32file.CloseHandle(handle)
-                    return {"success": False, "error": f"Write failed: {str(e)}"}
+emit(
+    "log",
+    msg=f"USB = {device}"
+)
 
-                written_total += len(chunk)
-                progress = int(written_total * 100 / iso_size)
-                print(json.dumps({"progress": progress}), flush=True)
+try:
 
-            win32file.CloseHandle(handle)
-            return {"success": True, "message": "Flash completed"}
+    # =========================
+    # DD
+    # =========================
+    if mode == "dd":
 
-    except Exception as e:
-        return {"success": False, "error": str(e)}
+        dd_flash(
+            iso_path,
+            device,
+            emit
+        )
 
-if __name__ == "__main__":
-    if len(sys.argv) < 4:
-        print(json.dumps({"success": False, "error": "Usage: backend.exe flash <iso_path> <device>"}))
-        sys.exit(1)
+    # =========================
+    # SMART
+    # =========================
+    elif mode == "smart":
 
-    command = sys.argv[1]
-    if command == "flash":
-        iso_path = sys.argv[2]
-        device = sys.argv[3]
-        result = flash_iso(iso_path, device)
-        print(json.dumps(result))
+        smart_flash(
+            iso_path,
+            device,
+            emit
+        )
+
+    # =========================
+    # VENTOY
+    # =========================
+    elif mode == "ventoy":
+
+        if ventoy_flash is None:
+
+            raise Exception(
+                "ventoy_mode.py not found"
+            )
+
+        ventoy_flash(
+            iso_path,
+            device,
+            emit
+        )
+
+    # =========================
+    # ETCHER
+    # =========================
+    elif mode == "etcher":
+
+        if etcher_flash is None:
+
+            raise Exception(
+                "etcher_flash.py not found"
+            )
+
+        etcher_flash(
+            iso_path,
+            device,
+            emit
+        )
+
+    else:
+
+        raise Exception(
+            f"Unknown Mode: {mode}"
+        )
+
+    emit(
+        "log",
+        msg="Flash Complete"
+    )
+
+    sys.exit(0)
+
+except Exception as e:
+
+    emit(
+        "error",
+        msg=str(e)
+    )
+
+    sys.exit(1)
+```
+
+if **name** == "**main**":
+main()
