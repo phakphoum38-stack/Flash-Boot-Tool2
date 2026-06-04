@@ -34,7 +34,6 @@ def dd_flash(iso_path: Path, device_path: str, emit):
             while True:
                 if _cancel_event.is_set():
                     emit("log", level="warn", msg="Flash cancelled by user")
-                    emit("result", success=False, msg="Cancelled")
                     return
                 
                 _pause_event.wait()
@@ -47,23 +46,42 @@ def dd_flash(iso_path: Path, device_path: str, emit):
                 written += len(chunk)
                 
                 # คำนวณ speed แบบไม่ใช้ global
-                if time.time() - start_time > 0.5:
-                    speed = int((written - last_written) / (time.time() - start_time) / 1024 / 1024)
-                    start_time = time.time()
-                    last_written = written
-                else:
-                    speed = 0
+                last_speed_time = time.time()
+
+...
+
+if time.time() - last_speed_time > 0.5:
+
+```
+speed = int(
+    (written - last_written)
+    /
+    (time.time() - last_speed_time)
+    /
+    1024
+    /
+    1024
+)
+
+last_written = written
+last_speed_time = time.time()
+```
+
+else:
+
+```
+speed = 0
+```
+
                 
                 progress = int(written * 100 / size)
                 emit("progress", value=progress, written=written, total=size, speed=speed)
         
         win32file.CloseHandle(handle)
         emit("log", level="info", msg="Write completed")
-        emit("result", success=True, msg="Flash completed")
         
     except Exception as e:
         emit("error", msg=str(e))
-        emit("result", success=False, msg=str(e))
 
 def cancel_flash():
     _cancel_event.set()
