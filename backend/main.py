@@ -16,7 +16,7 @@ except Exception:
 
 def emit(event_type, **kwargs):
 
-if event_type == "progress":
+  if event_type == "progress":
 
     value = kwargs.get("value", 0)
 
