@@ -5,18 +5,18 @@ from flash_tool.flash.dd_flash import dd_flash
 from flash_tool.flash.smart_flash import smart_flash
 
 try:
-    from flash_tool.flash.ventoy_mode import ventoy_flash
+from flash_tool.flash.ventoy_mode import ventoy_flash
 except Exception:
-    ventoy_flash = None
+ventoy_flash = None
 
 try:
-    from flash_tool.flash.etcher_flash import etcher_flash
+from flash_tool.flash.etcher_flash import etcher_flash
 except Exception:
-    etcher_flash = None
+etcher_flash = None
 
 def emit(event_type, **kwargs):
 
-    if event_type == "progress":
+if event_type == "progress":
 
     value = kwargs.get("value", 0)
 
@@ -62,25 +62,12 @@ if len(sys.argv) < 4:
     sys.exit(1)
 
 mode = sys.argv[1].lower().strip()
-
 iso_path = Path(sys.argv[2])
-
 device = sys.argv[3]
 
-emit(
-    "log",
-    msg=f"Mode = {mode}"
-)
-
-emit(
-    "log",
-    msg=f"ISO = {iso_path}"
-)
-
-emit(
-    "log",
-    msg=f"USB = {device}"
-)
+emit("log", msg=f"Mode = {mode}")
+emit("log", msg=f"ISO = {iso_path}")
+emit("log", msg=f"USB = {device}")
 
 try:
 
@@ -103,7 +90,6 @@ try:
     elif mode == "ventoy":
 
         if ventoy_flash is None:
-
             raise Exception(
                 "ventoy_mode.py not found"
             )
@@ -117,7 +103,6 @@ try:
     elif mode == "etcher":
 
         if etcher_flash is None:
-
             raise Exception(
                 "etcher_flash.py not found"
             )
