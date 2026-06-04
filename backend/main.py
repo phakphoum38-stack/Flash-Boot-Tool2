@@ -5,14 +5,14 @@ from flash_tool.flash.dd_flash import dd_flash
 from flash_tool.flash.smart_flash import smart_flash
 
 try:
-from flash_tool.flash.ventoy_mode import ventoy_flash
+   from flash_tool.flash.ventoy_mode import ventoy_flash
 except Exception:
-ventoy_flash = None
+   ventoy_flash = None
 
 try:
-from flash_tool.flash.etcher_flash import etcher_flash
+   from flash_tool.flash.etcher_flash import etcher_flash
 except Exception:
-etcher_flash = None
+   etcher_flash = None
 
 def emit(event_type, **kwargs):
 
