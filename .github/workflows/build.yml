@@ -23,6 +23,11 @@ jobs:
         with:
           python-version: "3.11"
 
+      - name: Show backend main.py
+        shell: pwsh
+        run: |
+          Get-Content backend/main.py
+
       - name: Install backend deps
         working-directory: ./backend
         run: |
