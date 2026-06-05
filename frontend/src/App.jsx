@@ -14,6 +14,7 @@ function App() {
   const [usbDevices, setUsbDevices] = useState([])
 
   const [progress, setProgress] = useState(0)
+  const [verifyProgress, setVerifyProgress] = useState(0)
   const [status, setStatus] = useState('idle')
 
   const [logs, setLogs] = useState([])
@@ -39,6 +40,10 @@ function App() {
         // progress
         if (event.type === 'progress') {
           setProgress(event.value)
+        }
+
+        if (event.type === 'verify_progress') {
+          setVerifyProgress(event.value)
         }
 
         // logs
@@ -564,6 +569,14 @@ function App() {
                 {progress}%
                 {' '}
                 {isPaused && '(Paused)'}
+              </div>
+
+              <div style={{
+                marginTop: 10,
+                fontWeight: 'bold',
+                color: '#004cff'
+              }}>
+                Verify: {verifyProgress}%
               </div>
 
             </div>
