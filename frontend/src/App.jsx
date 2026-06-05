@@ -378,11 +378,11 @@ function App() {
               </button>
 
               <button
-  onClick={() => setMode('etcher')}
-  style={tabStyle(mode === 'etcher')}
->
-  ETCHER
-</button>
+                onClick={() => setMode('etcher')}
+                style={tabStyle(mode === 'etcher')}
+              >
+                ETCHER
+              </button>
 
             </div>
 
