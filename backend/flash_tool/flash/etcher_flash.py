@@ -5,8 +5,11 @@ from flash_tool.flash.dd_flash import dd_flash
 
 
 def verify_flash(iso_path: Path, device_path: str, emit):
-    # โค้ด verify_flash ของคุณ
-    ...
+    if (line.startsWith("VERIFY:")) {
+    setVerifyProgress(
+        Number(line.replace("VERIFY:", ""))
+    )
+}
 
 
 def etcher_flash(
