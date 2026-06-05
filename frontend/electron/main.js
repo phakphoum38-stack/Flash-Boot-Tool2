@@ -1,26 +1,20 @@
-const {
-  app,
-  BrowserWindow,
-  ipcMain,
-  dialog
-} = require("electron")
-
+const { app, BrowserWindow, ipcMain, dialog } = require("electron")
 const { spawn } = require("child_process")
 const path = require("path")
 const fs = require("fs")
-const isAdmin = require("is-admin")
 
-let mainWindow
-let backend = null
-let currentFlashProc = null
+let mainWindow = null
+let backendProc = null
+let flashProc = null
 
 // =========================
 // PATH
 // =========================
 function getBackendPath() {
-  return app.isPackaged
-    ? path.join(process.resourcesPath, "backend", "backend.exe")
-    : path.join(__dirname, "../../backend/dist/backend.exe")
+  if (app.isPackaged) {
+    return path.join(process.resourcesPath, "backend", "backend.exe")
+  }
+  return path.join(__dirname, "../../backend/dist/backend.exe")
 }
 
 // =========================
@@ -38,46 +32,32 @@ function createWindow() {
   })
 
   const devUrl = process.env.VITE_DEV_SERVER_URL
-
-  if (devUrl) {
-    mainWindow.loadURL(devUrl)
-  } else {
-    mainWindow.loadFile(path.join(__dirname, "../dist/index.html"))
-  }
+  if (devUrl) mainWindow.loadURL(devUrl)
+  else mainWindow.loadFile(path.join(__dirname, "../dist/index.html"))
 
   mainWindow.webContents.openDevTools()
 }
 
 // =========================
-// USB AUTO REFRESH CACHE
+// USB CACHE (ลด lag)
 // =========================
 let usbCache = []
-let usbLastTime = 0
+let lastUsbTime = 0
 
-ipcMain.handle("get-usb-devices", async () => {
+async function getUsbDevices() {
   const now = Date.now()
+  if (now - lastUsbTime < 2000) return usbCache
 
-  // 🔥 cache 1.5s ลด lag
-  if (now - usbLastTime < 1500) return usbCache
+  const { execSync } = require("child_process")
 
   try {
-    const { exec } = require("child_process")
-    const util = require("util")
-    const execPromise = util.promisify(exec)
+    const cmd = `powershell -NoProfile "Get-CimInstance Win32_DiskDrive | Where-Object {$_.InterfaceType -eq 'USB'} | Select DeviceID,Model,Size | ConvertTo-Json"`
 
-    const cmd = `
-powershell -NoProfile -ExecutionPolicy Bypass "
-Get-CimInstance Win32_DiskDrive |
-Where-Object { $_.InterfaceType -eq 'USB' } |
-Select DeviceID, Model, Size |
-ConvertTo-Json -Depth 2
-"
-`
+    const out = execSync(cmd).toString().trim()
+    if (!out) return []
 
-    const { stdout } = await execPromise(cmd)
-
-    const raw = stdout ? JSON.parse(stdout) : []
-    const arr = Array.isArray(raw) ? raw : [raw]
+    const data = JSON.parse(out)
+    const arr = Array.isArray(data) ? data : [data]
 
     usbCache = arr.map(d => ({
       path: d.DeviceID,
@@ -85,15 +65,22 @@ ConvertTo-Json -Depth 2
       size: Number(d.Size || 0)
     }))
 
-    usbLastTime = now
+    lastUsbTime = now
     return usbCache
   } catch {
-    return usbCache
+    return []
   }
+}
+
+// =========================
+// IPC: USB
+// =========================
+ipcMain.handle("get-usb-devices", async () => {
+  return getUsbDevices()
 })
 
 // =========================
-// SELECT ISO
+// IPC: ISO
 // =========================
 ipcMain.handle("select-iso", async () => {
   const result = await dialog.showOpenDialog(mainWindow, {
@@ -105,73 +92,87 @@ ipcMain.handle("select-iso", async () => {
 })
 
 // =========================
-// FLASH ENGINE
+// FLASH ENGINE (STREAM + EVENT BUS)
 // =========================
 ipcMain.handle("flash-iso", async (event, mode, iso, device) => {
-  return new Promise(resolve => {
+  const backend = getBackendPath()
 
-    const backendExe = getBackendPath()
-
-    if (!fs.existsSync(backendExe)) {
-      event.sender.send("flash-event", {
-        type: "error",
-        msg: "backend not found"
-      })
-      return resolve({ success: false })
-    }
-
-    const args = ["flash", mode, iso, device]
-
-    currentFlashProc = spawn(backendExe, args)
-
-    currentFlashProc.stdout.on("data", data => {
-      const lines = data.toString().split("\n")
-
-      for (const line of lines) {
-
-        if (line.startsWith("PROGRESS:")) {
-          event.sender.send("flash-event", {
-            type: "progress",
-            value: Number(line.split(":")[1])
-          })
-        }
-
-        if (line.startsWith("VERIFY:")) {
-          event.sender.send("flash-event", {
-            type: "verify_progress",
-            value: Number(line.split(":")[1])
-          })
-        }
-
-        if (line.startsWith("LOG:")) {
-          event.sender.send("flash-event", {
-            type: "log",
-            msg: line.replace("LOG:", "").trim()
-          })
-        }
-      }
+  if (!fs.existsSync(backend)) {
+    event.sender.send("flash-event", {
+      type: "error",
+      msg: "backend missing"
     })
+    return { success: false }
+  }
 
-    currentFlashProc.on("close", code => {
-      event.sender.send("flash-event", {
-        type: "result",
-        success: code === 0
-      })
+  flashProc = spawn(backend, [mode, iso, device], {
+    windowsHide: true
+  })
 
-      currentFlashProc = null
-      resolve({ success: code === 0 })
+  let buffer = ""
+
+  flashProc.stdout.on("data", data => {
+    buffer += data.toString()
+
+    let lines = buffer.split("\n")
+    buffer = lines.pop()
+
+    for (const line of lines) {
+      const msg = line.trim()
+
+      // PROGRESS 0-100
+      if (msg.startsWith("PROGRESS:")) {
+        const v = Number(msg.split(":")[1])
+        event.sender.send("flash-event", {
+          type: "progress",
+          value: v
+        })
+      }
+
+      // VERIFY
+      if (msg.startsWith("VERIFY:")) {
+        const v = Number(msg.split(":")[1])
+        event.sender.send("flash-event", {
+          type: "verify",
+          value: v
+        })
+      }
+
+      // LOG
+      if (msg.startsWith("LOG:")) {
+        event.sender.send("flash-event", {
+          type: "log",
+          msg: msg.replace("LOG:", "").trim()
+        })
+      }
+    }
+  })
+
+  flashProc.on("close", code => {
+    event.sender.send("flash-event", {
+      type: "result",
+      success: code === 0
+    })
+    flashProc = null
+  })
+
+  flashProc.on("error", err => {
+    event.sender.send("flash-event", {
+      type: "error",
+      msg: err.message
     })
   })
+
+  return { success: true }
 })
 
 // =========================
-// CANCEL
+// CANCEL SAFE
 // =========================
 ipcMain.on("cancel-flash", () => {
-  if (currentFlashProc) {
-    currentFlashProc.kill()
-    currentFlashProc = null
-
+  if (flashProc) {
+    flashProc.kill()
+    flashProc = null
     mainWindow.webContents.send("flash-event", {
       type: "cancelled"
     })
