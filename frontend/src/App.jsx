@@ -33,7 +33,7 @@ function App() {
     }, 3000)
 
     const unsubscribe =
-      window.electron.onFlashEvent((event) => {
+      window.electronAPI.onFlashEvent((event) => {
 
         console.log(event)
 
@@ -127,7 +127,7 @@ function App() {
     try {
 
       const devices =
-        await window.electron.getUsbDevices()
+        await window.electronAPI.getUsbDevices()
 
       setUsbDevices(devices)
 
@@ -225,7 +225,7 @@ function App() {
 
     try {
 
-      await window.electron.flashIso(
+      await window.electronAPI.flashIso(
         mode,
         isoPath,
         device
@@ -242,7 +242,7 @@ function App() {
   // =========================
   const handleCancel = async () => {
 
-    await window.electron.cancelFlash()
+    await window.electronAPI.cancelFlash()
 
     setStatus('idle')
 
@@ -259,11 +259,11 @@ function App() {
 
     if (isPaused) {
 
-      await window.electron.resumeFlash()
+      await window.electronAPI.resumeFlash()
 
     } else {
 
-      await window.electron.pauseFlash()
+      await window.electronAPI.pauseFlash()
     }
 
     setIsPaused(!isPaused)
