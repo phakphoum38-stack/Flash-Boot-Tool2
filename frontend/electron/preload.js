@@ -1,44 +1,23 @@
-import { contextBridge, ipcRenderer } from 'electron'
+const { contextBridge, ipcRenderer } = require("electron")
 
-contextBridge.exposeInMainWorld('electronAPI', {
+contextBridge.exposeInMainWorld("electronAPI", {
+  selectIso: () => ipcRenderer.invoke("select-iso"),
 
-  // =========================
-  // ISO
-  // =========================
-  selectIso: () =>
-    ipcRenderer.invoke('select-iso'),
+  getUsbDevices: () => ipcRenderer.invoke("get-usb-devices"),
 
-  // =========================
-  // USB
-  // =========================
-  getUsbDevices: () =>
-    ipcRenderer.invoke('get-usb-devices'),
-
-  // =========================
-  // FLASH
-  // =========================
   flashIso: (mode, isoPath, device) =>
-    ipcRenderer.invoke('flash-iso', mode, isoPath, device),
+    ipcRenderer.invoke("flash-iso", mode, isoPath, device),
 
-  // =========================
-  // EVENTS
-  // =========================
-  onFlashEvent: (callback) => {
+  cancelFlash: () => ipcRenderer.send("cancel-flash"),
 
-    const handler = (_event, data) => {
-      callback(data)
-    }
+  pauseFlash: () => ipcRenderer.send("pause-flash"),
 
-    ipcRenderer.on('flash-event', handler)
+  resumeFlash: () => ipcRenderer.send("resume-flash"),
 
-    return () => {
-      ipcRenderer.removeListener('flash-event', handler)
-    }
-  },
+  onFlashEvent: (cb) => {
+    const handler = (_, data) => cb(data)
+    ipcRenderer.on("flash-event", handler)
 
-  // =========================
-  // CONTROL
-  // =========================
-  cancelFlash: () =>
-    ipcRenderer.invoke('cancel-flash')
+    return () => ipcRenderer.removeListener("flash-event", handler)
+  }
 })
