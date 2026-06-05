@@ -1,184 +1,109 @@
-import { ipcMain } from 'electron'
-import { spawn, ChildProcessWithoutNullStreams } from 'child_process'
+import { app, BrowserWindow, ipcMain, dialog } from 'electron'
 import path from 'path'
 import fs from 'fs'
+import { spawn, ChildProcessWithoutNullStreams } from 'child_process'
 
+let mainWindow: BrowserWindow | null = null
 let flashProcess: ChildProcessWithoutNullStreams | null = null
 
 // =========================
-// Backend / Ventoy Paths
+// CREATE WINDOW
 // =========================
-const backendExe = process.env.NODE_ENV === 'development'
-  ? path.join(__dirname, '../../../backend/dist/backend.exe')
-  : path.join(process.resourcesPath, 'backend', 'backend.exe')
+function createWindow() {
+  mainWindow = new BrowserWindow({
+    width: 1400,
+    height: 900,
+    webPreferences: {
+      preload: path.join(__dirname, 'preload.js'),
+      contextIsolation: true,
+      nodeIntegration: false
+    }
+  })
 
-const ventoyExe = process.env.NODE_ENV === 'development'
-  ? path.join(__dirname, '../../../backend/flash_tool/resources/ventoy/Ventoy2Disk.exe')
-  : path.join(process.resourcesPath, 'ventoy', 'Ventoy2Disk.exe')
+  mainWindow.loadURL('http://localhost:5173')
+}
 
-console.log('==========================')
-console.log('Backend EXE:', backendExe)
-console.log('Backend Exists:', fs.existsSync(backendExe))
-
-console.log('Ventoy EXE:', ventoyExe)
-console.log('Ventoy Exists:', fs.existsSync(ventoyExe))
-
-console.log('Resources Path:', process.resourcesPath)
-console.log('==========================')
+app.whenReady().then(createWindow)
 
 // =========================
-// Flash ISO
+// SELECT ISO
 // =========================
-ipcMain.handle(
-  'flash-iso',
-  async (event, mode: string, isoPath: string, device: string) => {
+ipcMain.handle('select-iso', async () => {
+  const result = await dialog.showOpenDialog({
+    title: 'Select ISO File',
+    properties: ['openFile'],
+    filters: [
+      { name: 'ISO Files', extensions: ['iso', 'img'] }
+    ]
+  })
 
-    return new Promise((resolve, reject) => {
+  if (result.canceled) return null
+  return result.filePaths[0]
+})
 
-      // เช็ก backend.exe
-      if (!fs.existsSync(backendExe)) {
-        reject(
-          new Error(`backend.exe not found:\n${backendExe}`)
-        )
-        return
-      }
+// =========================
+// GET USB DEVICES (mock ถ้ายังไม่มี backend)
+// =========================
+ipcMain.handle('get-usb-devices', async () => {
+  return [
+    { name: 'USB Drive 1', path: 'E:/', size: 32000000000 },
+    { name: 'USB Drive 2', path: 'F:/', size: 64000000000 }
+  ]
+})
 
-      // args
-      const args = ['flash', mode, isoPath, device]
+// =========================
+// FLASH ISO (mock backend integration)
+// =========================
+ipcMain.handle('flash-iso', async (event, mode, isoPath, device) => {
+  return new Promise((resolve) => {
 
-      // Ventoy mode
-      if (mode === 'ventoy') {
+    console.log('FLASH START:', mode, isoPath, device)
 
-        if (!fs.existsSync(ventoyExe)) {
-          reject(
-            new Error(`Ventoy2Disk.exe not found:\n${ventoyExe}`)
-          )
-          return
-        }
+    let progress = 0
 
-        args.push(ventoyExe)
-      }
+    flashProcess = setInterval(() => {
 
-      console.log('FLASH COMMAND:')
-      console.log(backendExe)
-      console.log(args)
+      progress += 5
 
-      // Spawn backend
-      flashProcess = spawn(
-        backendExe,
-        args,
-        {
-          windowsHide: true
-        }
-      )
-
-      // =========================
-      // STDOUT
-      // =========================
-      flashProcess.stdout.on('data', (data) => {
-
-        const lines = data
-          .toString()
-          .split('\n')
-          .filter(Boolean)
-
-        for (const line of lines) {
-
-          console.log('BACKEND:', line)
-
-          try {
-
-            const msg = JSON.parse(line)
-
-            // ส่งไป renderer
-            event.sender.send(
-              'flash-event',
-              msg
-            )
-
-            // success
-            if (msg.type === 'result') {
-              resolve(msg)
-            }
-
-            // error
-            if (msg.type === 'error') {
-              reject(
-                new Error(msg.msg)
-              )
-            }
-
-          } catch (e) {
-
-            console.error(
-              'JSON Parse Error:',
-              line
-            )
-          }
-        }
+      mainWindow?.webContents.send('flash-event', {
+        type: 'progress',
+        value: progress
       })
 
-      // =========================
-      // STDERR
-      // =========================
-      flashProcess.stderr.on('data', (data) => {
-
-        const err = data.toString()
-
-        console.error('BACKEND STDERR:', err)
-
-        event.sender.send(
-          'flash-event',
-          {
-            type: 'error',
-            msg: err
-          }
-        )
+      mainWindow?.webContents.send('flash-event', {
+        type: 'log',
+        msg: `Writing... ${progress}%`
       })
 
-      // =========================
-      // EXIT
-      // =========================
-      flashProcess.on('exit', (code) => {
+      if (progress >= 100) {
 
-        console.log('Backend Exit:', code)
-
+        clearInterval(flashProcess as any)
         flashProcess = null
 
-        if (code !== 0 && code !== null) {
-
-          reject(
-            new Error(
-              `Backend exited with code ${code}`
-            )
-          )
+        const result = {
+          type: 'result',
+          success: true
         }
-      })
 
-      // =========================
-      // SPAWN ERROR
-      // =========================
-      flashProcess.on('error', (err) => {
+        mainWindow?.webContents.send('flash-event', result)
+        resolve(result)
+      }
 
-        console.error('SPAWN ERROR:', err)
-
-        reject(err)
-      })
-    })
-  }
-)
+    }, 200)
+  })
+})
 
 // =========================
-// Cancel Flash
+// CANCEL
 // =========================
 ipcMain.handle('cancel-flash', async () => {
 
   if (flashProcess) {
-
-    flashProcess.kill('SIGTERM')
-
+    clearInterval(flashProcess as any)
     flashProcess = null
 
-    console.log('Flash cancelled')
+    mainWindow?.webContents.send('flash-event', {
+      type: 'cancelled'
+    })
   }
 })
