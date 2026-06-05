@@ -20,6 +20,10 @@ def emit(event_type, **kwargs):
         value = kwargs.get("value", 0)
         print(f"PROGRESS:{value}", flush=True)
 
+    elif event_type == "verify_progress":
+        value = kwargs.get("value", 0)
+        print(f"VERIFY:{value}", flush=True)
+
     elif event_type == "log":
         msg = kwargs.get("msg", "")
         print(f"LOG:{msg}", flush=True)
