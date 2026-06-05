@@ -46,6 +46,10 @@ function App() {
           setVerifyProgress(event.value)
         }
 
+        if (event.type === 'verify_progress') {
+          setVerifyProgress(event.value)
+        }
+
         // logs
         if (event.type === 'log') {
           addLog(event.msg)
