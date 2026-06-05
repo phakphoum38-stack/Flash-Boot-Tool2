@@ -1,36 +1,77 @@
 import { contextBridge, ipcRenderer } from 'electron'
 
-type FlashEvent = 
-  | { type: 'progress', value: number, written: number, total: number }
-  | { type: 'log', level: string, msg: string }
-  | { type: 'result', success: boolean, msg?: string }
-  | { type: 'error', msg: string }
+contextBridge.exposeInMainWorld('electronAPI', {
 
-contextBridge.exposeInMainWorld('electron', {
-  flashIso: (mode: string, isoPath: string, device: string) => 
-    ipcRenderer.invoke('flash-iso', mode, isoPath, device),
-  
-  onFlashEvent: (callback: (event: FlashEvent) => void) => {
-    const handler = (_: any, event: FlashEvent) => callback(event)
-    ipcRenderer.on('flash-event', handler)
-    return () => ipcRenderer.removeListener('flash-event', handler)
+  // ======================
+  // ISO
+  // ======================
+  selectIso: () =>
+    ipcRenderer.invoke('select-iso'),
+
+  // ======================
+  // USB
+  // ======================
+  getUsbDevices: () =>
+    ipcRenderer.invoke('get-usb-devices'),
+
+  // ======================
+  // FILE SIZE
+  // ======================
+  getFileSize: (filePath: string) =>
+    ipcRenderer.invoke('get-file-size', filePath),
+
+  // ======================
+  // FLASH
+  // ======================
+  flashIso: (
+    mode: string,
+    isoPath: string,
+    device: string
+  ) =>
+    ipcRenderer.invoke(
+      'flash-iso',
+      mode,
+      isoPath,
+      device
+    ),
+
+  // ======================
+  // EVENTS
+  // ======================
+  onFlashEvent: (callback: any) => {
+
+    const handler = (
+      _: any,
+      data: any
+    ) => callback(data)
+
+    ipcRenderer.on(
+      'flash-event',
+      handler
+    )
+
+    return () =>
+      ipcRenderer.removeListener(
+        'flash-event',
+        handler
+      )
   },
-  
-  selectIsoFile: () => ipcRenderer.invoke('select-iso'),
-  getUsbDevices: () => ipcRenderer.invoke('get-usb-devices')
-})
 
-contextBridge.exposeInMainWorld('electron', {
-  flashIso: (mode: string, isoPath: string, device: string) =>
-    ipcRenderer.invoke('flash-iso', mode, isoPath, device),
+  // ======================
+  // PAUSE
+  // ======================
+  pauseFlash: () =>
+    ipcRenderer.send('pause-flash'),
 
-  onFlashEvent: (callback) => {
-    const handler = (_: any, event) => callback(event)
-    ipcRenderer.on('flash-event', handler)
-    return () => ipcRenderer.removeListener('flash-event', handler)
-  },
+  // ======================
+  // RESUME
+  // ======================
+  resumeFlash: () =>
+    ipcRenderer.send('resume-flash'),
 
-  selectIsoFile: () => ipcRenderer.invoke('select-iso'),
-  getUsbDevices: () => ipcRenderer.invoke('get-usb-devices'),
-  getFileSize: (path: string) => ipcRenderer.invoke('get-file-size', path)
+  // ======================
+  // CANCEL
+  // ======================
+  cancelFlash: () =>
+    ipcRenderer.invoke('cancel-flash')
 })
