@@ -1,716 +1,174 @@
-const {
-  app,
-  BrowserWindow,
-  ipcMain,
-  dialog
-} = require("electron")
-
-const {
-  spawn,
-  exec
-} = require("child_process")
-
-const {
-  promisify
-} = require("util")
-
+const { app, BrowserWindow, ipcMain, dialog } = require("electron")
+const { spawn, exec } = require("child_process")
+const { promisify } = require("util")
 const path = require("path")
 const fs = require("fs")
-const isAdmin = require("is-admin")
 
 const execPromise = promisify(exec)
 
-let mainWindow
+let mainWindow = null
 let backend = null
 let currentFlashProc = null
 
 // =========================
-// Backend Path
+// PATH
 // =========================
 function getBackendPath() {
-
   if (app.isPackaged) {
-
-    return path.join(
-      process.resourcesPath,
-      "backend",
-      "backend.exe"
-    )
+    return path.join(process.resourcesPath, "backend", "backend.exe")
   }
 
-  return path.join(
-    __dirname,
-    "../../backend/dist/backend.exe"
-  )
+  return path.join(__dirname, "../../backend/dist/backend.exe")
 }
 
 // =========================
-// Start Backend
-// =========================
-function startBackend() {
-
-  const exePath =
-    getBackendPath()
-
-  console.log("================================")
-  console.log("Backend Path:", exePath)
-  console.log("App Packaged:", app.isPackaged)
-  console.log("Exists:", fs.existsSync(exePath))
-  console.log("Resources Path:", process.resourcesPath)
-  console.log("================================")
-
-  if (!fs.existsSync(exePath)) {
-
-    dialog.showErrorBox(
-      "Backend Error",
-      `backend.exe not found:\n\n${exePath}`
-    )
-
-    return
-  }
-
-  backend = spawn(
-    exePath,
-    [],
-    {
-      windowsHide: true
-    }
-  )
-
-  backend.stdout.on(
-    "data",
-    data => {
-
-      console.log(
-        "[Backend]",
-        data.toString()
-      )
-    }
-  )
-
-  backend.stderr.on(
-    "data",
-    data => {
-
-      console.error(
-        "[Backend ERR]",
-        data.toString()
-      )
-    }
-  )
-
-  backend.on(
-    "error",
-    err => {
-
-      console.error(
-        "SPAWN ERROR:",
-        err
-      )
-
-      dialog.showErrorBox(
-        "Spawn Error",
-        err.message
-      )
-    }
-  )
-
-  backend.on(
-    "close",
-    code => {
-
-      console.log(
-        "Backend exited:",
-        code
-      )
-    }
-  )
-}
-
-// =========================
-// Create Window
+// WINDOW
 // =========================
 function createWindow() {
+  mainWindow = new BrowserWindow({
+    width: 1280,
+    height: 720,
+    webPreferences: {
+      preload: path.join(__dirname, "preload.js"),
+      contextIsolation: true,
+      nodeIntegration: false
+    }
+  })
 
-  mainWindow =
-    new BrowserWindow({
-
-      width: 1280,
-      height: 720,
-
-      webPreferences: {
-
-        preload: path.join(
-          __dirname,
-          "preload.js"
-        ),
-
-        contextIsolation: true,
-
-        nodeIntegration: false,
-
-        sandbox: false
-      }
-    })
-
-  const devUrl =
-    process.env.VITE_DEV_SERVER_URL
-
+  const devUrl = process.env.VITE_DEV_SERVER_URL
   if (devUrl) {
-
-    mainWindow.loadURL(
-      devUrl
-    )
-
+    mainWindow.loadURL(devUrl)
   } else {
-
-    mainWindow.loadFile(
-      path.join(
-        __dirname,
-        "../dist/index.html"
-      )
-    )
+    mainWindow.loadFile(path.join(__dirname, "../dist/index.html"))
   }
 
   mainWindow.webContents.openDevTools()
 }
 
 // =========================
-// Run as Admin
+// SELECT ISO
 // =========================
-async function runAsAdmin() {
-
-  const admin =
-    await isAdmin()
-
-  if (!admin) {
-
-    const args =
-      process.argv
-        .slice(1)
-        .join(" ")
-
-    spawn(
-      "powershell",
-      [
-        "Start-Process",
-        process.execPath,
-        "-Verb",
-        "runAs",
-        "-ArgumentList",
-        `"${args}"`
-      ],
-      {
-        detached: true,
-        stdio: "ignore"
-      }
-    )
-
-    app.quit()
-
-    return false
-  }
-
-  return true
-}
-
-// =========================
-// App Ready
-// =========================
-app.whenReady().then(
-  async () => {
-
-    if (!(await runAsAdmin())) {
-      return
-    }
-
-    startBackend()
-
-    setTimeout(() => {
-
-      createWindow()
-
-    }, 1000)
-  }
-)
-
-// =========================
-// Cleanup
-// =========================
-app.on(
-  "will-quit",
-  () => {
-
-    if (backend) {
-      backend.kill()
-    }
-
-    if (currentFlashProc) {
-      currentFlashProc.kill()
-    }
-  }
-)
-
-app.on(
-  "window-all-closed",
-  () => {
-
-    if (
-      process.platform !== "darwin"
-    ) {
-
-      app.quit()
-    }
-  }
-)
-
-// =========================
-// Select ISO
-// =========================
-console.log("REGISTER SELECT ISO")
 ipcMain.handle("select-iso", async () => {
+  const result = await dialog.showOpenDialog(mainWindow, {
+    properties: ["openFile"],
+    filters: [{ name: "ISO", extensions: ["iso", "img"] }]
+  })
 
-  console.log("SELECT ISO CALLED")
+  return result.canceled ? null : result.filePaths[0]
+})
 
+// =========================
+// USB LIST
+// =========================
+ipcMain.handle("get-usb-devices", async () => {
   try {
+    const cmd = `powershell -NoProfile -Command "Get-CimInstance Win32_DiskDrive | Where-Object {$_.InterfaceType -eq 'USB'} | Select DeviceID,Model,Size | ConvertTo-Json"`
 
-    const result =
-      await dialog.showOpenDialog(
-        mainWindow,
-        {
-          title: "Select ISO",
-          properties: ["openFile"],
-          filters: [
-            {
-              name: "ISO Files",
-              extensions: ["iso", "img"]
-            }
-          ]
-        }
-      )
+    const { stdout } = await execPromise(cmd)
 
-    console.log(result)
+    if (!stdout) return []
 
-    return result.canceled
-      ? null
-      : result.filePaths[0]
+    const data = JSON.parse(stdout)
+    const list = Array.isArray(data) ? data : [data]
 
-  } catch (err) {
-
-    console.error(err)
-
-    return null
+    return list.map(d => ({
+      path: d.DeviceID,
+      name: d.Model || "USB",
+      size: Number(d.Size || 0)
+    }))
+  } catch (e) {
+    console.error(e)
+    return []
   }
 })
 
 // =========================
-// Get USB Devices
+// FLASH ISO (MAIN ENGINE)
 // =========================
-ipcMain.handle(
-  "get-usb-devices",
-  async () => {
+ipcMain.handle("flash-iso", async (event, mode, isoPath, device) => {
+  return new Promise((resolve) => {
+    const backendExe = getBackendPath()
 
-    try {
+    if (!fs.existsSync(backendExe)) {
+      event.sender.send("flash-event", {
+        type: "error",
+        msg: "backend.exe not found"
+      })
 
-      const cmd = `
-powershell -NoProfile -ExecutionPolicy Bypass "
-Get-CimInstance Win32_DiskDrive |
-Where-Object {
-  $_.InterfaceType -eq 'USB'
-} |
-Select-Object DeviceID, Model, Size |
-ConvertTo-Json -Depth 2
-"
-`
-
-      console.log(
-        "RUN CMD:",
-        cmd
-      )
-
-      const {
-        stdout,
-        stderr
-      } = await execPromise(cmd)
-
-      console.log(
-        "USB STDOUT:",
-        stdout
-      )
-
-      console.log(
-        "USB STDERR:",
-        stderr
-      )
-
-      if (
-        !stdout ||
-        !stdout.trim()
-      ) {
-
-        return []
-      }
-
-      const disks =
-        JSON.parse(stdout)
-
-      const diskArray =
-        Array.isArray(disks)
-          ? disks
-          : [disks]
-
-      return diskArray.map(
-        d => ({
-
-          path:
-            d.DeviceID,
-
-          name:
-            d.Model ||
-            "USB Device",
-
-          size:
-            Number(
-              d.Size || 0
-            )
-        })
-      )
-
-    } catch (e) {
-
-      console.error(
-        "USB DETECT ERROR:",
-        e
-      )
-
-      return []
+      return resolve({ success: false })
     }
-  }
-)
 
-// =========================
-// Flash ISO
-// =========================
-ipcMain.handle(
-  "flash-iso",
-  async (
-    event,
-    mode,
-    isoPath,
-    device
-  ) => {
-
-    console.log(
-      "=== Flash Start ==="
-    )
-
-    console.log({
-      mode,
-      isoPath,
-      device
+    currentFlashProc = spawn(backendExe, [mode, isoPath, device], {
+      windowsHide: true
     })
 
-    return new Promise(
-      resolve => {
+    currentFlashProc.stdout.on("data", (data) => {
+      const lines = data.toString().split("\n").filter(Boolean)
 
-        const backendExe =
-          getBackendPath()
+      for (const line of lines) {
+        const msg = line.trim()
 
-        console.log(
-          "FLASH BACKEND:",
-          backendExe
-        )
-
-        console.log(
-          "BACKEND EXISTS:",
-          fs.existsSync(
-            backendExe
-          )
-        )
-
-        if (
-          !fs.existsSync(
-            backendExe
-          )
-        ) {
-
-          event.sender.send(
-            "flash-event",
-            {
-              type: "error",
-              msg:
-                "backend.exe not found"
-            }
-          )
-
-          resolve({
-            success: false
+        if (msg.startsWith("PROGRESS:")) {
+          event.sender.send("flash-event", {
+            type: "progress",
+            value: Number(msg.split(":")[1])
           })
-
-          return
         }
 
-        currentFlashProc =
-          spawn(
-            backendExe,
-            [
-              mode,
-              isoPath,
-              device
-            ],
-            {
-              windowsHide: true
-            }
-          )
+        if (msg.startsWith("VERIFY:")) {
+          event.sender.send("flash-event", {
+            type: "verify_progress",
+            value: Number(msg.split(":")[1])
+          })
+        }
 
-        currentFlashProc.stdout.on(
-          "data",
-          data => {
-
-            const lines =
-              data
-                .toString()
-                .split("\n")
-                .filter(Boolean)
-
-            for (const line of lines) {
-
-              const msg =
-                line.trim()
-
-              console.log(
-                "Backend OUT:",
-                msg
-              )
-
-              if (
-                msg.startsWith(
-                  "PROGRESS:"
-                )
-              ) {
-
-                const percent =
-                  parseInt(
-                    msg.split(
-                      ":"
-                    )[1]
-                  )
-
-                event.sender.send(
-                  "flash-event",
-                  {
-                    type:
-                      "progress",
-
-                    value:
-                      percent
-                  }
-                )
-              }
-
-              if (
-                msg.startsWith(
-                  "VERIFY:"
-                )
-              ) {
-
-                const percent =
-                  parseInt(
-                   msg.split(":")[1]
-                 )
-
-                event.sender.send(
-                  "flash-event",
-                  {
-                   type: "verify_progress",
-                     value: percent
-                  }
-                )
-              }
-
-              if (
-                msg.startsWith(
-                  "LOG:"
-                )
-              ) {
-
-                event.sender.send(
-                  "flash-event",
-                  {
-                    type:
-                      "log",
-
-                    level:
-                      "info",
-
-                    msg:
-                      msg
-                        .substring(
-                          4
-                        )
-                        .trim()
-                  }
-                )
-              }
-            }
-          }
-        )
-
-        currentFlashProc.stderr.on(
-          "data",
-          data => {
-
-            const err =
-              data
-                .toString()
-                .trim()
-
-            console.error(
-              "Backend ERR:",
-              err
-            )
-
-            event.sender.send(
-              "flash-event",
-              {
-                type:
-                  "error",
-
-                msg:
-                  err
-              }
-            )
-          }
-        )
-
-        currentFlashProc.on(
-          "error",
-          err => {
-
-            console.error(
-              "FLASH SPAWN ERROR:",
-              err
-            )
-
-            event.sender.send(
-              "flash-event",
-              {
-                type:
-                  "error",
-
-                msg:
-                  err.message
-              }
-            )
-          }
-        )
-
-        currentFlashProc.on(
-          "close",
-          code => {
-
-            console.log(
-              "Backend Exit Code:",
-              code
-            )
-
-            event.sender.send(
-              "flash-event",
-              {
-                type:
-                  "result",
-
-                success:
-                  code === 0,
-
-                msg:
-                  code === 0
-                    ? "Success"
-                    : "Failed"
-              }
-            )
-
-            currentFlashProc =
-              null
-
-            resolve({
-              success:
-                code === 0
-            })
-          }
-        )
+        if (msg.startsWith("LOG:")) {
+          event.sender.send("flash-event", {
+            type: "log",
+            msg: msg.replace("LOG:", "").trim()
+          })
+        }
       }
-    )
+    })
+
+    currentFlashProc.stderr.on("data", (d) => {
+      event.sender.send("flash-event", {
+        type: "error",
+        msg: d.toString()
+      })
+    })
+
+    currentFlashProc.on("close", (code) => {
+      event.sender.send("flash-event", {
+        type: "result",
+        success: code === 0
+      })
+
+      currentFlashProc = null
+      resolve({ success: code === 0 })
+    })
+  })
+})
+
+// =========================
+// CANCEL
+// =========================
+ipcMain.on("cancel-flash", () => {
+  if (currentFlashProc) {
+    currentFlashProc.kill()
+    currentFlashProc = null
+
+    mainWindow.webContents.send("flash-event", {
+      type: "cancelled"
+    })
   }
-)
+})
 
 // =========================
-// Cancel Flash
+// APP
 // =========================
-ipcMain.on(
-  "cancel-flash",
-  () => {
+app.whenReady().then(createWindow)
 
-    if (
-      currentFlashProc
-    ) {
-
-      currentFlashProc.kill()
-
-      currentFlashProc =
-        null
-
-      mainWindow.webContents.send(
-        "flash-event",
-        {
-          type:
-            "cancelled"
-        }
-      )
-    }
-  }
-)
-
-// =========================
-// Pause Flash
-// =========================
-ipcMain.on(
-  "pause-flash",
-  () => {
-
-    if (
-      currentFlashProc
-    ) {
-
-      mainWindow.webContents.send(
-        "flash-event",
-        {
-          type:
-            "paused"
-        }
-      )
-    }
-  }
-)
-
-// =========================
-// Resume Flash
-// =========================
-ipcMain.on(
-  "resume-flash",
-  () => {
-
-    if (
-      currentFlashProc
-    ) {
-
-      mainWindow.webContents.send(
-        "flash-event",
-        {
-          type:
-            "resumed"
-        }
-      )
-    }
-  }
-)
+app.on("window-all-closed", () => {
+  if (process.platform !== "darwin") app.quit()
+})
