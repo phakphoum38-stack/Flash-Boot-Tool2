@@ -1,7 +1,8 @@
 const { contextBridge, ipcRenderer } = require("electron")
 
-contextBridge.exposeInMainWorld("electronAPI", {
+let listeners = new Set()
 
+contextBridge.exposeInMainWorld("electron", {
   flashIso: (mode, iso, device) =>
     ipcRenderer.invoke("flash-iso", mode, iso, device),
 
@@ -13,12 +14,17 @@ contextBridge.exposeInMainWorld("electronAPI", {
 
   onFlashEvent: (cb) => {
     const handler = (_, data) => cb(data)
-    ipcRenderer.on("flash-event", handler)
 
-    return () =>
+    ipcRenderer.on("flash-event", handler)
+    listeners.add(handler)
+
+    return () => {
       ipcRenderer.removeListener("flash-event", handler)
+      listeners.delete(handler)
+    }
   },
 
-  cancelFlash: () =>
-    ipcRenderer.send("cancel-flash")
+  cancelFlash: () => ipcRenderer.send("cancel-flash"),
+  pauseFlash: () => ipcRenderer.send("pause-flash"),
+  resumeFlash: () => ipcRenderer.send("resume-flash")
 })
