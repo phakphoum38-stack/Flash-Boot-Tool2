@@ -29,6 +29,11 @@ jobs:
           pip install -r requirements.txt
           pip install pyinstaller
 
+      - name: Show main.py
+        run: |
+          cd backend
+          type main.py
+
       - name: Build backend.exe
         working-directory: ./backend
         run: pyinstaller --onefile --name backend main.py
