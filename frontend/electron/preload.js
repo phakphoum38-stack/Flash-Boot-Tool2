@@ -1,95 +1,44 @@
-const { contextBridge, ipcRenderer } = require("electron")
+import { contextBridge, ipcRenderer } from 'electron'
 
-console.log("PRELOAD LOADED")
-
-contextBridge.exposeInMainWorld("electronAPI", {
+contextBridge.exposeInMainWorld('electronAPI', {
 
   // =========================
-  // Select ISO
+  // ISO
   // =========================
-  selectIso: async () => {
-    return await ipcRenderer.invoke("select-iso")
-  },
+  selectIso: () =>
+    ipcRenderer.invoke('select-iso'),
 
   // =========================
-  // USB Devices
+  // USB
   // =========================
-  getUsbDevices: async () => {
-    return await ipcRenderer.invoke("get-usb-devices")
-  },
+  getUsbDevices: () =>
+    ipcRenderer.invoke('get-usb-devices'),
 
   // =========================
-  // Flash ISO
+  // FLASH
   // =========================
-  flashIso: async (
-    mode,
-    isoPath,
-    device
-  ) => {
-
-    return await ipcRenderer.invoke(
-      "flash-iso",
-      mode,
-      isoPath,
-      device
-    )
-  },
+  flashIso: (mode, isoPath, device) =>
+    ipcRenderer.invoke('flash-iso', mode, isoPath, device),
 
   // =========================
-  // Flash Events
+  // EVENTS
   // =========================
   onFlashEvent: (callback) => {
 
-    const listener = (
-      event,
-      data
-    ) => {
-
+    const handler = (_event, data) => {
       callback(data)
     }
 
-    ipcRenderer.on(
-      "flash-event",
-      listener
-    )
+    ipcRenderer.on('flash-event', handler)
 
-    // unsubscribe
     return () => {
-
-      ipcRenderer.removeListener(
-        "flash-event",
-        listener
-      )
+      ipcRenderer.removeListener('flash-event', handler)
     }
   },
 
   // =========================
-  // Pause
+  // CONTROL
   // =========================
-  pauseFlash: () => {
-
-    ipcRenderer.send(
-      "pause-flash"
-    )
-  },
-
-  // =========================
-  // Resume
-  // =========================
-  resumeFlash: () => {
-
-    ipcRenderer.send(
-      "resume-flash"
-    )
-  },
-
-  // =========================
-  // Cancel
-  // =========================
-  cancelFlash: () => {
-
-    ipcRenderer.send(
-      "cancel-flash"
-    )
-  }
+  cancelFlash: () =>
+    ipcRenderer.invoke('cancel-flash')
 })
