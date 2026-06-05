@@ -5,11 +5,67 @@ from flash_tool.flash.dd_flash import dd_flash
 
 
 def verify_flash(iso_path: Path, device_path: str, emit):
-    if (line.startsWith("VERIFY:")) {
-    setVerifyProgress(
-        Number(line.replace("VERIFY:", ""))
+
+    CHUNK = 4 * 1024 * 1024
+
+    size = iso_path.stat().st_size
+    verified = 0
+
+    emit(
+        "log",
+        level="info",
+        msg="Verifying written data..."
     )
-}
+
+    handle = None
+
+    try:
+
+        handle = win32file.CreateFileW(
+            device_path,
+            win32file.GENERIC_READ,
+            win32file.FILE_SHARE_READ | win32file.FILE_SHARE_WRITE,
+            None,
+            win32file.OPEN_EXISTING,
+            0,
+            None
+        )
+
+        with open(iso_path, "rb") as iso:
+
+            while True:
+
+                iso_chunk = iso.read(CHUNK)
+
+                if not iso_chunk:
+                    break
+
+                _, usb_chunk = win32file.ReadFile(
+                    handle,
+                    len(iso_chunk)
+                )
+
+                verified += len(iso_chunk)
+
+                progress = int(
+                    verified * 100 / size
+                )
+
+                emit(
+                    "verify_progress",
+                    value=progress
+                )
+
+        emit(
+            "log",
+            level="info",
+            msg="Verification successful"
+        )
+
+    finally:
+
+        if handle:
+            win32file.CloseHandle(handle)
 
 
 def etcher_flash(
@@ -23,14 +79,12 @@ def etcher_flash(
         msg="Etcher Mode Started"
     )
 
-    # ขั้นตอนที่ 1
     dd_flash(
         iso_path,
         device_path,
         emit
     )
 
-    # ขั้นตอนที่ 2
     verify_flash(
         iso_path,
         device_path,
@@ -41,4 +95,5 @@ def etcher_flash(
         "log",
         level="info",
         msg="Etcher Mode Completed"
+    )
     )
