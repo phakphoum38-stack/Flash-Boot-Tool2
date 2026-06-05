@@ -214,6 +214,7 @@ function App() {
     setStatus('flashing')
 
     setProgress(0)
+    setVerifyProgress(0)
 
     setLogs([])
 
