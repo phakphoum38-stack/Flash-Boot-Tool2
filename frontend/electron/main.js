@@ -509,6 +509,26 @@ ipcMain.handle(
               }
 
               if (
+  msg.startsWith(
+    "VERIFY:"
+  )
+) {
+
+  const percent =
+    parseInt(
+      msg.split(":")[1]
+    )
+
+  event.sender.send(
+    "flash-event",
+    {
+      type: "verify_progress",
+      value: percent
+    }
+  )
+}
+
+              if (
                 msg.startsWith(
                   "LOG:"
                 )
