@@ -247,6 +247,7 @@ function App() {
     setStatus('idle')
 
     setProgress(0)
+    setVerifyProgress(0)
 
     setIsPaused(false)
   }
