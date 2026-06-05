@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react"
+import { useEffect, useRef, useState } from "react"
 
 export default function App() {
 
@@ -8,70 +8,94 @@ export default function App() {
   const [usbDevices, setUsbDevices] = useState([])
 
   const [progress, setProgress] = useState(0)
-  const [verifyProgress, setVerifyProgress] = useState(0)
+  const targetProgress = useRef(0)
+
+  const [verify, setVerify] = useState(0)
   const [status, setStatus] = useState("idle")
   const [logs, setLogs] = useState([])
-  const [isPaused, setIsPaused] = useState(false)
-
-  const isFlashing = status === "flashing"
 
   // =========================
-  // LOAD USB
+  // 60 FPS SMOOTH PROGRESS
   // =========================
   useEffect(() => {
-    loadUsb()
 
-    const unsub = window.electronAPI.onFlashEvent((event) => {
+    let frame
 
-      if (event.type === "progress") setProgress(event.value)
-      if (event.type === "verify_progress") setVerifyProgress(event.value)
+    const animate = () => {
+      setProgress(prev => {
+        const diff = targetProgress.current - prev
+        return prev + diff * 0.12
+      })
 
-      if (event.type === "log") addLog(event.msg)
+      frame = requestAnimationFrame(animate)
+    }
 
-      if (event.type === "error") {
-        setStatus("error")
-        addLog(event.msg)
+    animate()
+
+    return () => cancelAnimationFrame(frame)
+  }, [])
+
+  // =========================
+  // USB SMART REFRESH (NO LAG)
+  // =========================
+  const lastUSB = useRef("")
+
+  const loadUSB = async () => {
+    const list = await window.electronAPI.getUsbDevices()
+
+    const hash = JSON.stringify(list.map(x => x.path))
+
+    if (hash !== lastUSB.current) {
+      lastUSB.current = hash
+      setUsbDevices(list)
+    }
+  }
+
+  useEffect(() => {
+    loadUSB()
+    const t = setInterval(loadUSB, 8000)
+    return () => clearInterval(t)
+  }, [])
+
+  // =========================
+  // EVENTS
+  // =========================
+  useEffect(() => {
+
+    const unsub = window.electronAPI.onFlashEvent((e) => {
+
+      if (e.type === "progress") {
+        targetProgress.current = e.value
       }
 
-      if (event.type === "result") {
-        setStatus(event.success ? "done" : "error")
+      if (e.type === "verify_progress") {
+        setVerify(e.value)
       }
 
-      if (event.type === "cancelled") setStatus("idle")
-      if (event.type === "paused") setIsPaused(true)
-      if (event.type === "resumed") setIsPaused(false)
+      if (e.type === "log") {
+        setLogs(p => [...p, e.msg])
+      }
+
+      if (e.type === "result") {
+        setStatus(e.success ? "done" : "error")
+      }
+
+      if (e.type === "cancelled") setStatus("idle")
     })
 
     return () => unsub()
   }, [])
 
-  const loadUsb = async () => {
-    const list = await window.electronAPI.getUsbDevices()
-    setUsbDevices(list)
-  }
-
-  const addLog = (msg) => {
-    setLogs(prev => [...prev, msg])
-  }
-
   // =========================
-  // FIXED SELECT ISO
+  // ISO SELECT FIX
   // =========================
-  const handleSelectIso = async () => {
-    console.log("CLICK ISO")
-
+  const selectIso = async () => {
     const file = await window.electronAPI.selectIso()
-
-    console.log("ISO:", file)
-
-    if (file) {
-      setIsoPath(file)
-      addLog("Selected: " + file)
-    }
+    if (file) setIsoPath(file)
   }
 
-  const handleFlash = async () => {
-    if (!isoPath || !device) return alert("เลือกก่อน")
+  const flash = async () => {
+    if (!isoPath || !device) return alert("missing")
 
     setStatus("flashing")
     setProgress(0)
@@ -82,16 +106,13 @@ export default function App() {
   return (
     <div style={{ padding: 20 }}>
 
-      <h2>Flash Tool</h2>
+      <h2>🔥 Flash Tool Pro</h2>
 
       <input value={isoPath} readOnly />
+      <button onClick={selectIso}>Browse ISO</button>
 
-      <button onClick={handleSelectIso}>
-        Browse ISO
-      </button>
-
-      <select value={device} onChange={e => setDevice(e.target.value)}>
-        <option value="">-- USB --</option>
+      <select onChange={e => setDevice(e.target.value)}>
+        <option value="">USB</option>
         {usbDevices.map(u => (
           <option key={u.path} value={u.path}>
             {u.name}
@@ -99,16 +120,26 @@ export default function App() {
         ))}
       </select>
 
-      <button onClick={handleFlash}>
-        START
-      </button>
+      <div style={{
+        height: 20,
+        width: 300,
+        border: "1px solid #000"
+      }}>
+        <div style={{
+          width: `${progress}%`,
+          height: "100%",
+          background: "lime"
+        }} />
+      </div>
 
-      <div>Progress: {progress}%</div>
+      <button onClick={flash}>START</button>
 
       <div>
-        {logs.map((l, i) => (
-          <div key={i}>{l}</div>
-        ))}
+        VERIFY: {verify}%
+      </div>
+
+      <div>
+        {logs.map((l, i) => <div key={i}>{l}</div>)}
       </div>
 
     </div>
