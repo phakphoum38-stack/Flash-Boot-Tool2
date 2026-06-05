@@ -1,131 +1,115 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect } from "react"
 
 export default function App() {
 
-  const [mode, setMode] = useState('dd')
-  const [isoPath, setIsoPath] = useState('')
-  const [device, setDevice] = useState('')
+  const [mode, setMode] = useState("dd")
+  const [isoPath, setIsoPath] = useState("")
+  const [device, setDevice] = useState("")
   const [usbDevices, setUsbDevices] = useState([])
 
   const [progress, setProgress] = useState(0)
-  const [status, setStatus] = useState('idle')
+  const [verifyProgress, setVerifyProgress] = useState(0)
+  const [status, setStatus] = useState("idle")
   const [logs, setLogs] = useState([])
+  const [isPaused, setIsPaused] = useState(false)
+
+  const isFlashing = status === "flashing"
 
   // =========================
   // LOAD USB
   // =========================
   useEffect(() => {
     loadUsb()
+
+    const unsub = window.electronAPI.onFlashEvent((event) => {
+
+      if (event.type === "progress") setProgress(event.value)
+      if (event.type === "verify_progress") setVerifyProgress(event.value)
+
+      if (event.type === "log") addLog(event.msg)
+
+      if (event.type === "error") {
+        setStatus("error")
+        addLog(event.msg)
+      }
+
+      if (event.type === "result") {
+        setStatus(event.success ? "done" : "error")
+      }
+
+      if (event.type === "cancelled") setStatus("idle")
+      if (event.type === "paused") setIsPaused(true)
+      if (event.type === "resumed") setIsPaused(false)
+    })
+
+    return () => unsub()
   }, [])
 
   const loadUsb = async () => {
-    const data = await window.electronAPI.getUsbDevices()
-    setUsbDevices(data)
+    const list = await window.electronAPI.getUsbDevices()
+    setUsbDevices(list)
   }
 
-  // =========================
-  // LOG
-  // =========================
   const addLog = (msg) => {
     setLogs(prev => [...prev, msg])
   }
 
   // =========================
-  // SELECT ISO (FIXED)
+  // FIXED SELECT ISO
   // =========================
   const handleSelectIso = async () => {
-
-    console.log("CLICK BROWSE")
+    console.log("CLICK ISO")
 
     const file = await window.electronAPI.selectIso()
 
-    if (!file) return
+    console.log("ISO:", file)
 
-    setIsoPath(file)
-    addLog("Selected: " + file)
+    if (file) {
+      setIsoPath(file)
+      addLog("Selected: " + file)
+    }
   }
 
-  // =========================
-  // FLASH
-  // =========================
   const handleFlash = async () => {
+    if (!isoPath || !device) return alert("เลือกก่อน")
 
-    if (!isoPath || !device)
-      return alert("เลือก ISO + USB ก่อน")
-
-    setStatus('flashing')
+    setStatus("flashing")
     setProgress(0)
-    setLogs([])
 
-    await window.electronAPI.flashIso(
-      mode,
-      isoPath,
-      device
-    )
+    await window.electronAPI.flashIso(mode, isoPath, device)
   }
-
-  // =========================
-  // EVENT LISTENER
-  // =========================
-  useEffect(() => {
-
-    const unsubscribe =
-      window.electronAPI.onFlashEvent((e) => {
-
-        if (e.type === 'progress')
-          setProgress(e.value)
-
-        if (e.type === 'log')
-          addLog(e.msg)
-
-        if (e.type === 'result') {
-          setStatus('done')
-          addLog("DONE")
-        }
-
-        if (e.type === 'cancelled') {
-          setStatus('idle')
-          setProgress(0)
-        }
-      })
-
-    return () => unsubscribe()
-
-  }, [])
 
   return (
     <div style={{ padding: 20 }}>
 
       <h2>Flash Tool</h2>
 
-      {/* ISO */}
       <input value={isoPath} readOnly />
+
       <button onClick={handleSelectIso}>
         Browse ISO
       </button>
 
-      {/* USB */}
-      <select onChange={(e) => setDevice(e.target.value)}>
-        <option value="">Select USB</option>
-        {usbDevices.map(d => (
-          <option key={d.path} value={d.path}>
-            {d.name}
+      <select value={device} onChange={e => setDevice(e.target.value)}>
+        <option value="">-- USB --</option>
+        {usbDevices.map(u => (
+          <option key={u.path} value={u.path}>
+            {u.name}
           </option>
         ))}
       </select>
 
-      {/* FLASH */}
       <button onClick={handleFlash}>
         START
       </button>
 
-      {/* PROGRESS */}
       <div>Progress: {progress}%</div>
 
-      {/* LOGS */}
-      <pre>
-        {logs.join('\n')}
-      </pre>
+      <div>
+        {logs.map((l, i) => (
+          <div key={i}>{l}</div>
+        ))}
+      </div>
 
     </div>
   )
