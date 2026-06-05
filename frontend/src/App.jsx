@@ -1,60 +1,58 @@
-import { useEffect, useRef, useState } from "react"
+import { useState, useEffect, useRef } from "react"
 
 export default function App() {
 
   const [mode, setMode] = useState("dd")
-  const [isoPath, setIsoPath] = useState("")
+  const [iso, setIso] = useState("")
   const [device, setDevice] = useState("")
-  const [usbDevices, setUsbDevices] = useState([])
-
-  const [progress, setProgress] = useState(0)
-  const targetProgress = useRef(0)
-
-  const [verify, setVerify] = useState(0)
-  const [status, setStatus] = useState("idle")
+  const [usb, setUsb] = useState([])
   const [logs, setLogs] = useState([])
 
+  const targetProgress = useRef(0)
+  const [progress, setProgress] = useState(0)
+
+  const verify = useState(0)[0]
+  const [verifyProgress, setVerifyProgress] = useState(0)
+
+  const [status, setStatus] = useState("idle")
+
   // =========================
-  // 60 FPS SMOOTH PROGRESS
+  // SMOOTH 60FPS PROGRESS
   // =========================
   useEffect(() => {
 
-    let frame
+    let raf
 
     const animate = () => {
       setProgress(prev => {
         const diff = targetProgress.current - prev
-        return prev + diff * 0.12
+        return Math.abs(diff) < 0.1 ? targetProgress.current : prev + diff * 0.12
       })
 
-      frame = requestAnimationFrame(animate)
+      raf = requestAnimationFrame(animate)
     }
 
     animate()
 
-    return () => cancelAnimationFrame(frame)
+    return () => cancelAnimationFrame(raf)
+
   }, [])
 
   // =========================
-  // USB SMART REFRESH (NO LAG)
+  // USB AUTO REFRESH (NO LAG)
   // =========================
-  const lastUSB = useRef("")
-
-  const loadUSB = async () => {
-    const list = await window.electronAPI.getUsbDevices()
-
-    const hash = JSON.stringify(list.map(x => x.path))
-
-    if (hash !== lastUSB.current) {
-      lastUSB.current = hash
-      setUsbDevices(list)
-    }
-  }
-
   useEffect(() => {
-    loadUSB()
-    const t = setInterval(loadUSB, 8000)
-    return () => clearInterval(t)
+
+    const load = async () => {
+      const data = await window.electronAPI.getUsbDevices()
+      setUsb(data)
+    }
+
+    load()
+    const id = setInterval(load, 2000)
+
+    return () => clearInterval(id)
+
   }, [])
 
   // =========================
@@ -62,83 +60,99 @@ export default function App() {
   // =========================
   useEffect(() => {
 
-    const unsub = window.electronAPI.onFlashEvent((e) => {
+    const unsub = window.electronAPI.onFlashEvent(e => {
 
       if (e.type === "progress") {
         targetProgress.current = e.value
       }
 
       if (e.type === "verify_progress") {
-        setVerify(e.value)
+        setVerifyProgress(e.value)
       }
 
       if (e.type === "log") {
-        setLogs(p => [...p, e.msg])
+        setLogs(l => [...l, e.msg])
       }
 
       if (e.type === "result") {
         setStatus(e.success ? "done" : "error")
       }
 
-      if (e.type === "cancelled") setStatus("idle")
     })
 
-    return () => unsub()
+    return unsub
+
   }, [])
 
   // =========================
-  // ISO SELECT FIX
+  // ISO PICK
   // =========================
-  const selectIso = async () => {
+  const pickIso = async () => {
     const file = await window.electronAPI.selectIso()
-    if (file) setIsoPath(file)
+    if (file) setIso(file)
   }
 
-  const flash = async () => {
-    if (!isoPath || !device) return alert("missing")
+  // =========================
+  // FLASH
+  // =========================
+  const startFlash = async () => {
 
     setStatus("flashing")
-    setProgress(0)
+    setLogs([])
 
-    await window.electronAPI.flashIso(mode, isoPath, device)
+    await window.electronAPI.flashIso(mode, iso, device)
   }
 
   return (
-    <div style={{ padding: 20 }}>
+    <div style={{ background: "#1e1e1e", height: "100vh", color: "white", padding: 20 }}>
 
-      <h2>🔥 Flash Tool Pro</h2>
+      <h2>Flash Tool Hybrid UI</h2>
 
-      <input value={isoPath} readOnly />
-      <button onClick={selectIso}>Browse ISO</button>
+      {/* MODE */}
+      <div>
+        {["dd","smart","ventoy","etcher"].map(m => (
+          <button key={m} onClick={() => setMode(m)}>
+            {m.toUpperCase()}
+          </button>
+        ))}
+      </div>
 
+      {/* ISO */}
+      <div>
+        <input value={iso} readOnly />
+        <button onClick={pickIso}>Browse ISO</button>
+      </div>
+
+      {/* USB */}
       <select onChange={e => setDevice(e.target.value)}>
-        <option value="">USB</option>
-        {usbDevices.map(u => (
+        <option>USB</option>
+        {usb.map(u => (
           <option key={u.path} value={u.path}>
             {u.name}
           </option>
         ))}
       </select>
 
-      <div style={{
-        height: 20,
-        width: 300,
-        border: "1px solid #000"
-      }}>
+      {/* FLASH */}
+      <button onClick={startFlash}>
+        START
+      </button>
+
+      {/* PROGRESS */}
+      <div style={{ height: 20, background: "#333", marginTop: 20 }}>
         <div style={{
-          width: `${progress}%`,
+          width: progress + "%",
           height: "100%",
-          background: "lime"
+          background: "lime",
+          transition: "none"
         }} />
       </div>
 
-      <button onClick={flash}>START</button>
+      <div>Progress: {progress.toFixed(1)}%</div>
+      <div>Verify: {verifyProgress}%</div>
 
-      <div>
-        VERIFY: {verify}%
-      </div>
-
-      <div>
+      {/* LOG */}
+      <div style={{ marginTop: 20 }}>
         {logs.map((l, i) => <div key={i}>{l}</div>)}
       </div>
 
