@@ -1,57 +1,32 @@
 const { app, BrowserWindow, ipcMain, dialog } = require("electron");
-const { spawn, execSync } = require("child_process");
+const { execSync } = require("child_process");
 const path = require("path");
-const fs = require("fs");
 
 let mainWindow = null;
-let flashProc = null;
-
-// =========================
-// BACKEND PATH
-// =========================
-function getBackendPath() {
-  if (app.isPackaged) {
-    return path.join(
-      process.resourcesPath,
-      "backend",
-      "backend.exe"
-    );
-  }
-
-  return path.join(
-    __dirname,
-    "../../backend/dist/backend.exe"
-  );
-}
+let flashTimer = null;
+let verifyTimer = null;
 
 // =========================
 // WINDOW
 // =========================
 function createWindow() {
   mainWindow = new BrowserWindow({
-    width: 1280,
-    height: 720,
+    width: 1400,
+    height: 900,
     webPreferences: {
-      preload: path.join(
-        __dirname,
-        "preload.js"
-      ),
+      preload: path.join(__dirname, "preload.js"),
       contextIsolation: true,
       nodeIntegration: false,
     },
   });
 
-  const devUrl =
-    process.env.VITE_DEV_SERVER_URL;
+  const devUrl = process.env.VITE_DEV_SERVER_URL;
 
   if (devUrl) {
     mainWindow.loadURL(devUrl);
   } else {
     mainWindow.loadFile(
-      path.join(
-        __dirname,
-        "../dist/index.html"
-      )
+      path.join(__dirname, "../dist/index.html")
     );
   }
 
@@ -83,9 +58,7 @@ async function getUsbDevices() {
       return [];
     }
 
-    const parsed =
-      JSON.parse(output);
-
+    const parsed = JSON.parse(output);
     const arr = Array.isArray(parsed)
       ? parsed
       : [parsed];
@@ -100,17 +73,13 @@ async function getUsbDevices() {
 
     return usbCache;
   } catch (err) {
-    console.error(
-      "USB SCAN ERROR:",
-      err
-    );
-
+    console.error("USB SCAN ERROR:", err);
     return [];
   }
 }
 
 // =========================
-// IPC USB
+// USB
 // =========================
 ipcMain.handle(
   "get-usb-devices",
@@ -120,7 +89,7 @@ ipcMain.handle(
 );
 
 // =========================
-// IPC ISO
+// ISO
 // =========================
 ipcMain.handle(
   "select-iso",
@@ -132,7 +101,7 @@ ipcMain.handle(
           properties: ["openFile"],
           filters: [
             {
-              name: "ISO",
+              name: "ISO Files",
               extensions: [
                 "iso",
                 "img",
@@ -149,7 +118,7 @@ ipcMain.handle(
 );
 
 // =========================
-// FLASH ISO
+// FLASH ISO (MOCK)
 // =========================
 ipcMain.handle(
   "flash-iso",
@@ -159,248 +128,141 @@ ipcMain.handle(
     iso,
     device
   ) => {
-    try {
-      console.log(
-        "FLASH REQUEST"
-      );
+    console.log(
+      "FLASH START"
+    );
 
-      console.log({
-        mode,
-        iso,
-        device,
-      });
+    console.log({
+      mode,
+      iso,
+      device,
+    });
 
-      const backend =
-        getBackendPath();
-
-      console.log(
-        "Backend Path:",
-        backend
-      );
-
-      console.log(
-        "Backend Exists:",
-        fs.existsSync(
-          backend
-        )
-      );
-
-      if (
-        !fs.existsSync(backend)
-      ) {
-        const msg =
-          `Backend missing: ${backend}`;
-
-        console.error(msg);
-
-        event.sender.send(
-          "flash-event",
-          {
-            type: "error",
-            msg,
-          }
-        );
-
-        return {
-          success: false,
-        };
+    event.sender.send(
+      "flash-event",
+      {
+        type: "log",
+        msg:
+          `Mode: ${mode}`,
       }
+    );
 
-      flashProc = spawn(
-        backend,
-        [
-          mode,
-          iso,
-          device,
-        ],
+    event.sender.send(
+      "flash-event",
+      {
+        type: "log",
+        msg:
+          `ISO: ${iso}`,
+      }
+    );
+
+    event.sender.send(
+      "flash-event",
+      {
+        type: "log",
+        msg:
+          `USB: ${device}`,
+      }
+    );
+
+    let progress = 0;
+    let verify = 0;
+
+    flashTimer = setInterval(() => {
+      progress += 5;
+
+      event.sender.send(
+        "flash-event",
         {
-          windowsHide: true,
+          type: "progress",
+          value: progress,
         }
-      );
-
-      let buffer = "";
-
-      flashProc.stdout.on(
-        "data",
-        (data) => {
-          const chunk =
-            data.toString();
-
-          console.log(
-            "STDOUT:",
-            chunk
-          );
-
-          buffer += chunk;
-
-          const lines =
-            buffer.split("\n");
-
-          buffer =
-            lines.pop() || "";
-
-          for (const line of lines) {
-            const msg =
-              line.trim();
-
-            if (
-              msg.startsWith(
-                "PROGRESS:"
-              )
-            ) {
-              event.sender.send(
-                "flash-event",
-                {
-                  type:
-                    "progress",
-                  value: Number(
-                    msg.split(
-                      ":"
-                    )[1]
-                  ),
-                }
-              );
-            } else if (
-              msg.startsWith(
-                "VERIFY:"
-              )
-            ) {
-              event.sender.send(
-                "flash-event",
-                {
-                  type:
-                    "verify",
-                  value: Number(
-                    msg.split(
-                      ":"
-                    )[1]
-                  ),
-                }
-              );
-            } else if (
-              msg.startsWith(
-                "LOG:"
-              )
-            ) {
-              event.sender.send(
-                "flash-event",
-                {
-                  type: "log",
-                  msg: msg
-                    .replace(
-                      "LOG:",
-                      ""
-                    )
-                    .trim(),
-                }
-              );
-            } else {
-              event.sender.send(
-                "flash-event",
-                {
-                  type: "log",
-                  msg,
-                }
-              );
-            }
-          }
-        }
-      );
-
-      flashProc.stderr.on(
-        "data",
-        (data) => {
-          const msg =
-            data.toString();
-
-          console.error(
-            "STDERR:",
-            msg
-          );
-
-          event.sender.send(
-            "flash-event",
-            {
-              type: "error",
-              msg,
-            }
-          );
-        }
-      );
-
-      flashProc.on(
-        "error",
-        (err) => {
-          console.error(
-            "SPAWN ERROR:",
-            err
-          );
-
-          event.sender.send(
-            "flash-event",
-            {
-              type: "error",
-              msg:
-                err.message,
-            }
-          );
-        }
-      );
-
-      flashProc.on(
-        "close",
-        (code) => {
-          console.log(
-            "EXIT CODE:",
-            code
-          );
-
-          event.sender.send(
-            "flash-event",
-            {
-              type: "log",
-              msg:
-                "Exit Code: " +
-                code,
-            }
-          );
-
-          event.sender.send(
-            "flash-event",
-            {
-              type: "result",
-              success:
-                code === 0,
-            }
-          );
-
-          flashProc = null;
-        }
-      );
-
-      return {
-        success: true,
-      };
-    } catch (err) {
-      console.error(
-        "FLASH ERROR:",
-        err
       );
 
       event.sender.send(
         "flash-event",
         {
-          type: "error",
-          msg:
-            err?.message ||
-            String(err),
+          type: "speed",
+          value: Number(
+            (
+              25 +
+              Math.random() * 75
+            ).toFixed(1)
+          ),
         }
       );
 
-      return {
-        success: false,
-      };
-    }
+      event.sender.send(
+        "flash-event",
+        {
+          type: "log",
+          msg:
+            `Writing... ${progress}%`,
+        }
+      );
+
+      if (progress >= 100) {
+        clearInterval(
+          flashTimer
+        );
+
+        verifyTimer =
+          setInterval(() => {
+            verify += 10;
+
+            event.sender.send(
+              "flash-event",
+              {
+                type:
+                  "verify",
+                value:
+                  verify,
+              }
+            );
+
+            event.sender.send(
+              "flash-event",
+              {
+                type: "log",
+                msg:
+                  `Verify... ${verify}%`,
+              }
+            );
+
+            if (
+              verify >= 100
+            ) {
+              clearInterval(
+                verifyTimer
+              );
+
+              event.sender.send(
+                "flash-event",
+                {
+                  type:
+                    "log",
+                  msg:
+                    "Flash Complete",
+                }
+              );
+
+              event.sender.send(
+                "flash-event",
+                {
+                  type:
+                    "result",
+                  success:
+                    true,
+                }
+              );
+            }
+          }, 300);
+      }
+    }, 200);
+
+    return {
+      success: true,
+    };
   }
 );
 
@@ -410,19 +272,27 @@ ipcMain.handle(
 ipcMain.handle(
   "cancel-flash",
   async () => {
-    if (flashProc) {
-      flashProc.kill();
-
-      flashProc = null;
-
-      mainWindow?.webContents.send(
-        "flash-event",
-        {
-          type:
-            "cancelled",
-        }
+    if (flashTimer) {
+      clearInterval(
+        flashTimer
       );
+      flashTimer = null;
     }
+
+    if (verifyTimer) {
+      clearInterval(
+        verifyTimer
+      );
+      verifyTimer = null;
+    }
+
+    mainWindow?.webContents.send(
+      "flash-event",
+      {
+        type:
+          "cancelled",
+      }
+    );
 
     return true;
   }
