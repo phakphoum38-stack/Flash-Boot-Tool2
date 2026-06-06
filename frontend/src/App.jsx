@@ -100,52 +100,103 @@ useEffect(() => {
 const off =
   window.electron.onFlashEvent(
     ev => {
+
+      console.log(
+        "FLASH EVENT:",
+        ev
+      )
+
       switch (ev.type) {
+
         case "progress":
+
           rawProgress.current =
             ev.value
+
           break
+
         case "verify":
+
           rawVerify.current =
             ev.value
+
           break
+
         case "speed":
+
           setSpeed(
             ev.value
           )
+
           break
+
         case "log":
+
           setLogs(prev => [
             ...prev,
             ev.msg
           ])
+
           break
+
         case "error":
+
+          console.error(
+            "FLASH ERROR EVENT:",
+            ev
+          )
+
           setStatus(
             "error"
           )
+
           setLogs(prev => [
             ...prev,
             "ERROR: " +
             ev.msg
           ])
+
           break
+
         case "result":
+
+          console.log(
+            "FLASH RESULT EVENT:",
+            ev
+          )
+
           setStatus(
             ev.success
               ? "done"
               : "error"
           )
+
           break
+
         case "cancelled":
+
+          console.log(
+            "FLASH CANCELLED"
+          )
+
           setStatus(
             "idle"
           )
+
           rawProgress.current = 0
           rawVerify.current = 0
+
           setSpeed(0)
+
           break
+
         default:
+
+          console.log(
+            "UNKNOWN EVENT:",
+            ev
+          )
+
           break
       }
     }
