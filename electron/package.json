@@ -22,22 +22,36 @@
     "electron-builder": "^24.13.3"
   },
   "build": {
-    "appId": "com.flashboot.tool",
-    "productName": "Flash Boot Tool",
-    "directories": { "output": "release" },
-    "extraResources": [
-      { "from": "../backend/dist/backend.exe", "to": "backend/backend.exe" }
-      { "from": "../backend/flash_tool/resources/",
-    "to": "backend/resources" }
-    ],
-    "files": [
-      "dist/**/*",
-      "electron/**/*",
-      "extraResources": [],
-      "npmRebuild": true,
-      "asarUnpack": [
-      "**/node_modules/drivelist/**/*"
-    ],
-    "win": { "target": "nsis" }
+  "appId": "com.flashboot.tool",
+  "productName": "Flash Boot Tool",
+
+  "directories": {
+    "output": "release"
+  },
+
+  "files": [
+    "dist/**/*",
+    "electron/**/*"
+  ],
+
+  "extraResources": [
+    {
+      "from": "../backend/dist/backend.exe",
+      "to": "backend/backend.exe"
+    },
+    {
+      "from": "../backend/flash_tool/resources",
+      "to": "backend/resources"
+    }
+  ],
+
+  "npmRebuild": true,
+
+  "asarUnpack": [
+    "**/node_modules/drivelist/**/*"
+  ],
+
+  "win": {
+    "target": "nsis"
   }
 }
