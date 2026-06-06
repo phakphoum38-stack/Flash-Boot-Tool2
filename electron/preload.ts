@@ -1,44 +1,64 @@
-import { contextBridge, ipcRenderer } from 'electron'
+import { contextBridge, ipcRenderer } from "electron";
 
-contextBridge.exposeInMainWorld('electronAPI', {
-
+contextBridge.exposeInMainWorld("electron", {
   // =========================
   // ISO
   // =========================
   selectIso: () =>
-    ipcRenderer.invoke('select-iso'),
+    ipcRenderer.invoke("select-iso"),
 
   // =========================
   // USB
   // =========================
   getUsbDevices: () =>
-    ipcRenderer.invoke('get-usb-devices'),
+    ipcRenderer.invoke("get-usb-devices"),
 
   // =========================
   // FLASH
   // =========================
-  flashIso: (mode, isoPath, device) =>
-    ipcRenderer.invoke('flash-iso', mode, isoPath, device),
+  flashIso: (
+    mode: string,
+    isoPath: string,
+    device: string
+  ) =>
+    ipcRenderer.invoke(
+      "flash-iso",
+      mode,
+      isoPath,
+      device
+    ),
 
   // =========================
   // EVENTS
   // =========================
-  onFlashEvent: (callback) => {
+  onFlashEvent: (
+    callback: (data: any) => void
+  ) => {
+    const handler = (
+      _event: Electron.IpcRendererEvent,
+      data: any
+    ) => {
+      callback(data);
+    };
 
-    const handler = (_event, data) => {
-      callback(data)
-    }
-
-    ipcRenderer.on('flash-event', handler)
+    ipcRenderer.on(
+      "flash-event",
+      handler
+    );
 
     return () => {
-      ipcRenderer.removeListener('flash-event', handler)
-    }
+      ipcRenderer.removeListener(
+        "flash-event",
+        handler
+      );
+    };
   },
 
   // =========================
   // CONTROL
   // =========================
   cancelFlash: () =>
-    ipcRenderer.invoke('cancel-flash')
-})
+    ipcRenderer.invoke(
+      "cancel-flash"
+    ),
+});
