@@ -1,3 +1,4 @@
+console.log("MAIN LOADED");
 import { app, BrowserWindow, ipcMain, dialog } from "electron";
 import { execSync } from "child_process";
 import path from "path";
