@@ -113,31 +113,32 @@ export default function App() {
             break;
 
           case "error":
-            console.error(
-              "FLASH ERROR EVENT:",
-              ev
-            );
+  alert(
+    "ERROR EVENT:\n" +
+    JSON.stringify(ev)
+  );
 
-            setStatus("error");
+  setStatus("error");
 
-            setLogs((prev) => [
-              ...prev,
-              `ERROR: ${ev.msg}`,
-            ]);
-            break;
+  break;
 
           case "result":
-            console.log(
-              "FLASH RESULT EVENT:",
-              ev
-            );
+  console.log(
+    "RESULT RECEIVED:",
+    ev
+  );
 
-            setStatus(
-              ev.success
-                ? "done"
-                : "error"
-            );
-            break;
+  alert(
+    JSON.stringify(ev)
+  );
+
+  setStatus(
+    ev.success
+      ? "done"
+      : "error"
+  );
+
+  break;
 
           case "cancelled":
             console.log(
