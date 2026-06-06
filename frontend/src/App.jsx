@@ -174,36 +174,80 @@ async () => {
 // =========================
 // Start Flash
 // =========================
-const start =
-async () => {
+const start = async () => {
 
-  if (!iso)
-    return alert(
-      "Select ISO"
-    )
-  if (!device)
-    return alert(
-      "Select USB"
-    )
+  console.log("START CLICK")
+
+  console.log({
+    mode,
+    iso,
+    device
+  })
+
+  if (!iso) {
+    alert("Select ISO")
+    return
+  }
+
+  if (!device) {
+    alert("Select USB")
+    return
+  }
+
   rawProgress.current = 0
   rawVerify.current = 0
+
   setProgress(0)
   setVerify(0)
+
   setSpeed(0)
+
   setLogs([])
-  setStatus(
-    "flashing"
-  )
+
+  setStatus("flashing")
+
+  setLogs(prev => [
+    ...prev,
+    `Mode: ${mode}`,
+    `ISO: ${iso}`,
+    `USB: ${device}`
+  ])
+
   try {
-    await window.electron.flashIso(
-      mode,
-      iso,
-      device
+
+    const result =
+      await window.electron.flashIso(
+        mode,
+        iso,
+        device
+      )
+
+    console.log(
+      "FLASH RESULT:",
+      result
     )
+
+    setLogs(prev => [
+      ...prev,
+      `Flash started`
+    ])
+
   } catch (err) {
-    console.error(err)
-    setStatus(
-      "error"
+
+    console.error(
+      "FLASH ERROR:",
+      err
+    )
+
+    setStatus("error")
+
+    setLogs(prev => [
+      ...prev,
+      `ERROR: ${err.message}`
+    ])
+
+    alert(
+      "Flash Start Failed"
     )
   }
 }
