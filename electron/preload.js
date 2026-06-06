@@ -1,3 +1,4 @@
+console.log("PRELOAD LOADED");
 const { app, BrowserWindow, ipcMain, dialog } = require("electron");
 contextBridge.exposeInMainWorld("electron", {
 
