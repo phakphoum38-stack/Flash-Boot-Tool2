@@ -4,8 +4,7 @@
   "description": "Flash Boot Tool UI",
   "author": "phakphoum38-stack",
   "main": "electron/main.js",
-  "type": "module",
-
+  
   "scripts": {
     "dev": "vite",
     "build": "vite build",
