@@ -1,5 +1,4 @@
-const { contextBridge, ipcRenderer } = require("electron")
-
+const { app, BrowserWindow, ipcMain, dialog } = require("electron");
 contextBridge.exposeInMainWorld("electron", {
 
   flashIso: (mode, iso, device) =>
