@@ -115,9 +115,6 @@ ipcMain.handle("select-iso", async () => {
 });
 
 // =========================
-// FLASH ISO (MOCK)
-// =========================
-// =========================
 // FLASH ISO (MOCK - แก้ไขแล้ว)
 // =========================
 ipcMain.handle(
@@ -183,6 +180,24 @@ ipcMain.handle(
     return true;
   }
 );
+
+// =========================
+// PAUSE & RESUME
+// =========================
+ipcMain.handle("pause-flash", async () => {
+  if (flashTimer) {
+    clearInterval(flashTimer);
+    flashTimer = null;
+  }
+  mainWindow?.webContents.send("flash-event", { type: "paused" });
+  return true;
+});
+
+ipcMain.handle("resume-flash", async () => {
+  // ยังเป็น mock อยู่ ต่อยอดได้ภายหลัง
+  mainWindow?.webContents.send("flash-event", { type: "resumed" });
+  return true;
+});
 
 // =========================
 // APP
