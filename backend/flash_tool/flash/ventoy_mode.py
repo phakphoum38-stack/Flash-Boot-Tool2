@@ -1,25 +1,90 @@
 import os
+import ctypes
+import time
+from ctypes import wintypes
+
+kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+
+GENERIC_READ = 0x80000000
+GENERIC_WRITE = 0x40000000
+OPEN_EXISTING = 3
+FILE_ATTRIBUTE_NORMAL = 0x80
+
+FILE_SHARE_READ = 0x00000001
+FILE_SHARE_WRITE = 0x00000002
+
+FSCTL_LOCK_VOLUME = 0x00090018
+FSCTL_DISMOUNT_VOLUME = 0x00090020
+
+CHUNK = 1024 * 1024
 
 
 def ventoy_flash(image_path, device, emit=None):
-    CHUNK = 1024 * 1024
-
     size = os.path.getsize(image_path)
     written = 0
 
-    # safer than raw handle for ventoy mode
-    with open(device, "wb", buffering=0) as out:
-        with open(image_path, "rb") as f:
-            while True:
-                data = f.read(CHUNK)
-                if not data:
-                    break
+    if "PhysicalDrive" not in device:
+        raise RuntimeError("Use \\\\.\\PhysicalDriveX only")
 
-                out.write(data)
-                written += len(data)
+    CreateFileW = kernel32.CreateFileW
+    WriteFile = kernel32.WriteFile
+    CloseHandle = kernel32.CloseHandle
+    DeviceIoControl = kernel32.DeviceIoControl
 
-                if emit:
+    handle = CreateFileW(
+        device,
+        GENERIC_READ | GENERIC_WRITE,
+        FILE_SHARE_READ | FILE_SHARE_WRITE,
+        None,
+        OPEN_EXISTING,
+        FILE_ATTRIBUTE_NORMAL,
+        None
+    )
+
+    if handle == wintypes.HANDLE(-1).value:
+        raise RuntimeError("VENTOY: access denied")
+
+    # 🔥 MUST lock disk
+    DeviceIoControl(handle, FSCTL_LOCK_VOLUME, None, 0, None, 0, ctypes.byref(wintypes.DWORD()), None)
+    DeviceIoControl(handle, FSCTL_DISMOUNT_VOLUME, None, 0, None, 0, ctypes.byref(wintypes.DWORD()), None)
+
+    with open(image_path, "rb") as f:
+        while True:
+            data = f.read(CHUNK)
+            if not data:
+                break
+
+            bytes_written = wintypes.DWORD(0)
+
+            ok = WriteFile(
+                handle,
+                data,
+                len(data),
+                ctypes.byref(bytes_written),
+                None
+            )
+
+            if not ok:
+                err = ctypes.get_last_error()
+
+                if err == 5:
+                    time.sleep(0.3)
+                    continue
+
+                raise RuntimeError(f"VENTOY write failed: {err}")
+
+            written += bytes_written.value
+
+            if emit:
+                try:
                     emit("progress", value=written / size * 100)
+                except:
+                    pass
+
+    CloseHandle(handle)
 
     if emit:
-        emit("log", msg="VENTOY COMPLETE")
+        try:
+            emit("log", msg="VENTOY COMPLETE")
+        except:
+            pass
