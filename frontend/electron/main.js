@@ -8,13 +8,31 @@ let backendProc = null
 let flashProc = null
 
 // =========================
-// PATH
+// BACKEND PATH
 // =========================
 function getBackendPath() {
+  let backendPath;
+
   if (app.isPackaged) {
-    return path.join(process.resourcesPath, "backend", "backend.exe")
+    backendPath = path.join(
+      process.resourcesPath,
+      "backend",
+      "backend.exe"
+    );
+  } else {
+    backendPath = path.resolve(
+      __dirname,
+      "../../backend/dist/backend.exe"
+    );
   }
-  return path.join(__dirname, "../../backend/dist/backend.exe")
+
+  console.log("BACKEND PATH =", backendPath);
+  console.log(
+    "BACKEND EXISTS =",
+    fs.existsSync(backendPath)
+  );
+
+  return backendPath;
 }
 
 // =========================
@@ -94,77 +112,247 @@ ipcMain.handle("select-iso", async () => {
 // =========================
 // FLASH ENGINE (STREAM + EVENT BUS)
 // =========================
-ipcMain.handle("flash-iso", async (event, mode, iso, device) => {
-  const backend = getBackendPath()
+ipcMain.handle(
+  "flash-iso",
+  async (event, mode, iso, device) => {
+    try {
+      const backend = getBackendPath();
 
-  if (!fs.existsSync(backend)) {
-    event.sender.send("flash-event", {
-      type: "error",
-      msg: "backend missing"
-    })
-    return { success: false }
-  }
+      if (!fs.existsSync(backend)) {
+        const msg =
+          "backend.exe not found:\n" +
+          backend;
 
-  flashProc = spawn(backend, [mode, iso, device], {
-    windowsHide: true
-  })
+        console.error(msg);
 
-  let buffer = ""
+        event.sender.send(
+          "flash-event",
+          {
+            type: "error",
+            msg,
+          }
+        );
 
-  flashProc.stdout.on("data", data => {
-    buffer += data.toString()
+        event.sender.send(
+          "flash-event",
+          {
+            type: "result",
+            success: false,
+          }
+        );
 
-    let lines = buffer.split("\n")
-    buffer = lines.pop()
-
-    for (const line of lines) {
-      const msg = line.trim()
-
-      // PROGRESS 0-100
-      if (msg.startsWith("PROGRESS:")) {
-        const v = Number(msg.split(":")[1])
-        event.sender.send("flash-event", {
-          type: "progress",
-          value: v
-        })
+        return {
+          success: false,
+          error: msg,
+        };
       }
 
-      // VERIFY
-      if (msg.startsWith("VERIFY:")) {
-        const v = Number(msg.split(":")[1])
-        event.sender.send("flash-event", {
-          type: "verify",
-          value: v
-        })
-      }
+      flashProc = spawn(
+        backend,
+        [
+          mode,
+          iso,
+          device,
+        ],
+        {
+          windowsHide: true,
+        }
+      );
 
-      // LOG
-      if (msg.startsWith("LOG:")) {
-        event.sender.send("flash-event", {
-          type: "log",
-          msg: msg.replace("LOG:", "").trim()
-        })
-      }
+      let buffer = "";
+
+      flashProc.stdout.on(
+        "data",
+        (data) => {
+          buffer += data.toString();
+
+          const lines =
+            buffer.split(/\r?\n/);
+
+          buffer =
+            lines.pop() || "";
+
+          for (const line of lines) {
+            const msg =
+              line.trim();
+
+            console.log(
+              "[BACKEND]",
+              msg
+            );
+
+            if (
+              msg.startsWith(
+                "PROGRESS:"
+              )
+            ) {
+              event.sender.send(
+                "flash-event",
+                {
+                  type:
+                    "progress",
+                  value: Number(
+                    msg.split(
+                      ":"
+                    )[1]
+                  ),
+                }
+              );
+            } else if (
+              msg.startsWith(
+                "VERIFY:"
+              )
+            ) {
+              event.sender.send(
+                "flash-event",
+                {
+                  type:
+                    "verify",
+                  value: Number(
+                    msg.split(
+                      ":"
+                    )[1]
+                  ),
+                }
+              );
+            } else if (
+              msg.startsWith(
+                "SPEED:"
+              )
+            ) {
+              event.sender.send(
+                "flash-event",
+                {
+                  type:
+                    "speed",
+                  value: Number(
+                    msg.split(
+                      ":"
+                    )[1]
+                  ),
+                }
+              );
+            } else if (
+              msg.startsWith(
+                "LOG:"
+              )
+            ) {
+              event.sender.send(
+                "flash-event",
+                {
+                  type: "log",
+                  msg: msg
+                    .replace(
+                      "LOG:",
+                      ""
+                    )
+                    .trim(),
+                }
+              );
+            } else {
+              event.sender.send(
+                "flash-event",
+                {
+                  type: "log",
+                  msg,
+                }
+              );
+            }
+          }
+        }
+      );
+
+      flashProc.stderr.on(
+        "data",
+        (data) => {
+          const msg =
+            data.toString();
+
+          console.error(
+            "[BACKEND ERROR]",
+            msg
+          );
+
+          event.sender.send(
+            "flash-event",
+            {
+              type: "error",
+              msg,
+            }
+          );
+        }
+      );
+
+      flashProc.on(
+        "error",
+        (err) => {
+          console.error(
+            "SPAWN ERROR:",
+            err
+          );
+
+          event.sender.send(
+            "flash-event",
+            {
+              type: "error",
+              msg:
+                err.message,
+            }
+          );
+
+          event.sender.send(
+            "flash-event",
+            {
+              type: "result",
+              success: false,
+            }
+          );
+        }
+      );
+
+      flashProc.on(
+        "close",
+        (code) => {
+          console.log(
+            "BACKEND EXIT:",
+            code
+          );
+
+          event.sender.send(
+            "flash-event",
+            {
+              type: "result",
+              success:
+                code === 0,
+            }
+          );
+
+          flashProc = null;
+        }
+      );
+
+      return {
+        success: true,
+      };
+    } catch (err) {
+      console.error(err);
+
+      event.sender.send(
+        "flash-event",
+        {
+          type: "error",
+          msg:
+            err.message ||
+            String(err),
+        }
+      );
+
+      return {
+        success: false,
+      };
     }
-  })
-
-  flashProc.on("close", code => {
-    event.sender.send("flash-event", {
-      type: "result",
-      success: code === 0
-    })
-    flashProc = null
-  })
-
-  flashProc.on("error", err => {
-    event.sender.send("flash-event", {
-      type: "error",
-      msg: err.message
-    })
-  })
-
-  return { success: true }
-})
+  }
+);
 
 // =========================
 // CANCEL SAFE
