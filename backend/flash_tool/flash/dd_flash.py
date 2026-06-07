@@ -1,111 +1,75 @@
 import os
 import ctypes
-import time
-import msvcrt
-import pywintypes
-import win32file
-import winioctlcon
+from ctypes import wintypes
 
-def unmount_volume(drive_letter=None, device_path=None):
-    """
-    พยายาม lock + dismount volume ก่อนเขียน raw disk
-    """
-    try:
-        if drive_letter:
-            path = f"\\\\.\\{drive_letter}:"
-        else:
-            path = device_path
+kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
 
-        handle = win32file.CreateFile(
-            path,
-            win32file.GENERIC_READ | win32file.GENERIC_WRITE,
-            win32file.FILE_SHARE_READ | win32file.FILE_SHARE_WRITE,
-            None,
-            win32file.OPEN_EXISTING,
-            0,
-            None
-        )
+GENERIC_READ = 0x80000000
+GENERIC_WRITE = 0x40000000
+OPEN_EXISTING = 3
+FILE_ATTRIBUTE_NORMAL = 0x80
 
-        # lock volume
-        win32file.DeviceIoControl(
-            handle,
-            winioctlcon.FSCTL_LOCK_VOLUME,
-            None,
-            0
-        )
-
-        # dismount volume
-        win32file.DeviceIoControl(
-            handle,
-            winioctlcon.FSCTL_DISMOUNT_VOLUME,
-            None,
-            0
-        )
-
-        return handle
-
-    except Exception as e:
-        print("[WARN] unmount failed:", e)
-        return None
+CHUNK = 4 * 1024 * 1024
 
 
-def dd_write(image_path, physical_drive):
-    """
-    Write ISO/DD image to \\.\PHYSICALDRIVE*
-    """
+def dd_flash(image_path, device, emit=None):
+    size = os.path.getsize(image_path)
+    written = 0
 
-    if not os.path.exists(image_path):
-        raise FileNotFoundError(image_path)
+    CreateFileW = kernel32.CreateFileW
+    CreateFileW.argtypes = [
+        wintypes.LPCWSTR, wintypes.DWORD, wintypes.DWORD,
+        wintypes.LPVOID, wintypes.DWORD, wintypes.DWORD, wintypes.HANDLE
+    ]
+    CreateFileW.restype = wintypes.HANDLE
 
-    # เปิด disk แบบ raw
-    handle = win32file.CreateFile(
-        physical_drive,
-        win32file.GENERIC_READ | win32file.GENERIC_WRITE,
-        win32file.FILE_SHARE_READ | win32file.FILE_SHARE_WRITE,
+    WriteFile = kernel32.WriteFile
+    WriteFile.argtypes = [
+        wintypes.HANDLE, wintypes.LPCVOID,
+        wintypes.DWORD, ctypes.POINTER(wintypes.DWORD),
+        wintypes.LPVOID
+    ]
+
+    CloseHandle = kernel32.CloseHandle
+
+    handle = CreateFileW(
+        device,
+        GENERIC_READ | GENERIC_WRITE,
+        0,
         None,
-        win32file.OPEN_EXISTING,
-        win32file.FILE_FLAG_NO_BUFFERING | win32file.FILE_FLAG_WRITE_THROUGH,
+        OPEN_EXISTING,
+        FILE_ATTRIBUTE_NORMAL,
         None
     )
 
-    file_size = os.path.getsize(image_path)
-    chunk_size = 4 * 1024 * 1024  # 4MB buffer
-
-    written = 0
+    if handle == wintypes.HANDLE(-1).value:
+        raise RuntimeError("Failed to open device")
 
     with open(image_path, "rb") as f:
         while True:
-            data = f.read(chunk_size)
+            data = f.read(CHUNK)
             if not data:
                 break
 
-            try:
-                win32file.WriteFile(handle, data)
-            except pywintypes.error as e:
-                print("[ERROR] Write failed:", e)
-                print("Retrying in 1s...")
-                time.sleep(1)
-                continue
+            bytes_written = wintypes.DWORD(0)
 
-            written += len(data)
-            progress = (written / file_size) * 100
-            print(f"\rProgress: {progress:.2f}%", end="")
+            ok = WriteFile(
+                handle,
+                data,
+                len(data),
+                ctypes.byref(bytes_written),
+                None
+            )
 
-    handle.close()
-    print("\nDone ✔")
+            if not ok:
+                raise RuntimeError("WriteFile failed")
 
+            written += bytes_written.value
 
-def safe_flash(image_path, physical_drive):
-    """
-    wrapper: ลดปัญหา Windows lock USB
-    """
+            if emit:
+                emit("progress", value=written / size * 100)
 
-    print("[*] Preparing device...")
+    CloseHandle(handle)
 
-    # พยายามปลด volume ก่อน
-    unmount_volume(device_path=physical_drive)
-
-    time.sleep(2)
-
-    print("[*] Start writing...")
-    dd_write(image_path, physical_drive)
+    if emit:
+        emit("log", msg="DD complete (pure API)")
