@@ -2,10 +2,9 @@
 #include <string>
 
 HANDLE openDisk(int index) {
-
     std::string path = "\\\\.\\PhysicalDrive" + std::to_string(index);
 
-    return CreateFileA(
+    HANDLE h = CreateFileA(
         path.c_str(),
         GENERIC_READ | GENERIC_WRITE,
         FILE_SHARE_READ | FILE_SHARE_WRITE,
@@ -14,9 +13,6 @@ HANDLE openDisk(int index) {
         0,
         NULL
     );
-}
 
-void lockDisk(HANDLE h) {
-    DWORD bytes;
-    DeviceIoControl(h, FSCTL_LOCK_VOLUME, NULL, 0, NULL, 0, &bytes, NULL);
+    return h;
 }
