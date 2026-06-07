@@ -1,20 +1,18 @@
 #include <windows.h>
 
-bool retryWrite(HANDLE disk, BYTE* data, DWORD size) {
+bool retryWrite(HANDLE disk, char* data, size_t size) {
 
-    DWORD written = 0;
+    DWORD written;
 
     for (int i = 0; i < 3; i++) {
 
-        if (WriteFile(disk, data, size, &written, NULL))
+        if (WriteFile(disk, data, (DWORD)size, &written, NULL))
             return true;
 
         DWORD err = GetLastError();
 
-        // transient USB errors only
         if (err == ERROR_IO_DEVICE ||
-            err == ERROR_NOT_READY ||
-            err == ERROR_INVALID_PARAMETER) {
+            err == ERROR_NOT_READY) {
 
             Sleep(50);
             continue;
