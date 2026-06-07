@@ -1,44 +1,11 @@
-console.log("PRELOAD LOADED");
-const { app, BrowserWindow, ipcMain, dialog } = require("electron");
+const { contextBridge, ipcRenderer } = require("electron")
+
 contextBridge.exposeInMainWorld("electron", {
 
-  flashIso: (mode, iso, device) =>
-    ipcRenderer.invoke(
-      "flash-iso",
-      mode,
-      iso,
-      device
-    ),
+  invoke: (ch, ...args) =>
+    ipcRenderer.invoke(ch, ...args),
 
-  selectIso: () =>
-    ipcRenderer.invoke(
-      "select-iso"
-    ),
+  on: (ch, cb) =>
+    ipcRenderer.on(ch, cb)
 
-  getUsbDevices: () =>
-    ipcRenderer.invoke(
-      "get-usb-devices"
-    ),
-
-  onFlashEvent: (callback) => {
-
-    const handler = (_, event) =>
-      callback(event)
-
-    ipcRenderer.on(
-      "flash-event",
-      handler
-    )
-
-    return () =>
-      ipcRenderer.removeListener(
-        "flash-event",
-        handler
-      )
-  },
-
-  cancelFlash: () =>
-    ipcRenderer.send(
-      "cancel-flash"
-    )
 })
