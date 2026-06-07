@@ -1,83 +1,64 @@
-#pragma once
-
-#include <windows.h>
 #include <iostream>
 #include <fstream>
-#include <vector>
-
-#include "../disk/disk_open.cpp"
-#include "../disk/disk_ioctl.cpp"
-#include "../engine/retry_engine.cpp"
-#include "../engine/progress.cpp"
-#include "../engine/state_manager.cpp"
-#include "../ipc/pipe_server.cpp"
+#include "disk_open.cpp"
+#include "disk_ioctl.cpp"
+#include "disk_write.cpp"
+#include "state_manager.cpp"
 
 class FlashEngineV4 {
-
 public:
 
-    int start(const std::string& mode,
-              const std::string& iso,
-              const std::string& device) {
+    int run(std::string iso, std::string device) {
 
-        int index = extract(device);
+        FlashState state;
+        loadState(state);
 
+        int index = extractIndex(device);
         HANDLE disk = openDisk(index);
+
         if (disk == INVALID_HANDLE_VALUE) {
-            PipeServer::send("ERROR:disk open failed");
+            std::cout << "ERROR: disk open failed\n";
             return 1;
         }
 
         lockDisk(disk);
 
         std::ifstream file(iso, std::ios::binary);
-        if (!file.is_open()) {
-            PipeServer::send("ERROR:iso open failed");
-            return 1;
-        }
 
-        file.seekg(0, std::ios::end);
-        size_t total = file.tellg();
-        file.seekg(0);
+        const int CHUNK = 4 * 1024 * 1024;
+        BYTE* buffer = new BYTE[CHUNK];
 
-        const size_t CHUNK = 8 * 1024 * 1024;
-        std::vector<char> buffer(CHUNK);
+        file.seekg(state.offset);
 
-        size_t written = 0;
+        unsigned long long total = state.offset;
 
-        StateManager state(device);
+        while (file.read((char*)buffer, CHUNK) || file.gcount() > 0) {
 
-        while (file) {
+            DWORD size = file.gcount();
 
-            file.read(buffer.data(), CHUNK);
-            size_t size = file.gcount();
-
-            if (size == 0) break;
-
-            long long offset = state.offset();
-
-            if (!retryWrite(disk, buffer.data(), size)) {
-
-                PipeServer::send("LOG:write retry fail");
-                state.markBad(offset);
-
-                continue;
+            if (!writeChunk(disk, buffer, size, total)) {
+                std::cout << "ERROR: write fail\n";
+                state.offset = total;
+                saveState(state);
+                return 1;
             }
 
-            state.markDone(offset);
-
-            written += size;
-
-            progress((written * 100.0) / total);
+            state.offset = total;
+            saveState(state);
         }
 
-        PipeServer::send("DONE");
+        delete[] buffer;
+
+        unlockDisk(disk);
+        clearState();
+
+        std::cout << "DONE\n";
         return 0;
     }
 
 private:
-
-    int extract(std::string d) {
-        return std::stoi(d.substr(d.find("PhysicalDrive") + 13));
+    int extractIndex(std::string dev) {
+        size_t p = dev.find("PhysicalDrive");
+        return std::stoi(dev.substr(p + 13));
     }
 };
