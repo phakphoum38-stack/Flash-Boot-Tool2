@@ -170,11 +170,18 @@ ipcMain.handle("select-iso", async () => {
 // FLASH ENGINE (RUFUS STABLE PIPELINE)
 // =========================
 ipcMain.handle("flash-iso", async (event, mode, iso, device) => {
+  const jobId = Date.now().toString()
+
   const backend = getBackendPath()
 
-  flashProc = spawn(backend, ["v6", iso, device], {
-    windowsHide: true,
-    shell: false
+  flashProc = spawn(backend, [
+    "v7",
+    jobId,
+    iso,
+    device
+  ], {
+    shell: false,
+    windowsHide: true
   })
 
   let buffer = ""
@@ -195,7 +202,7 @@ ipcMain.handle("flash-iso", async (event, mode, iso, device) => {
         })
       }
 
-      else if (msg.startsWith("LOG:")) {
+      if (msg.startsWith("LOG:")) {
         safeSend(mainWindow, "flash-event", {
           type: "log",
           msg: msg.replace("LOG:", "")
@@ -207,11 +214,12 @@ ipcMain.handle("flash-iso", async (event, mode, iso, device) => {
   flashProc.on("close", () => {
     safeSend(mainWindow, "flash-event", {
       type: "result",
-      success: true
+      success: true,
+      jobId
     })
   })
 
-  return { success: true }
+  return { success: true, jobId }
 })
 
 // =========================
