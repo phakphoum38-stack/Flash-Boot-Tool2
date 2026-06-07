@@ -1,15 +1,23 @@
-#include "state.h"
-#include <fstream>
+#include <unordered_map>
+#include <string>
 
-void saveState(const FlashState& st) {
-    std::ofstream f("flash_state.bin", std::ios::binary | std::ios::trunc);
-    f.write((char*)&st, sizeof(st));
-}
+class StateManager {
 
-bool loadState(FlashState& st) {
-    std::ifstream f("flash_state.bin", std::ios::binary);
-    if (!f) return false;
+    std::unordered_map<long long, bool> done;
 
-    f.read((char*)&st, sizeof(st));
-    return true;
-}
+public:
+
+    StateManager(std::string device) {}
+
+    long long offset() {
+        return done.size() * 8192;
+    }
+
+    void markDone(long long o) {
+        done[o] = true;
+    }
+
+    void markBad(long long o) {
+        done[o] = true;
+    }
+};
