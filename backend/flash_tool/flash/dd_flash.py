@@ -1,98 +1,111 @@
-import win32file
-import threading
+import os
+import ctypes
 import time
-from pathlib import Path
+import msvcrt
+import pywintypes
+import win32file
+import winioctlcon
 
-_cancel_event = threading.Event()
-_pause_event = threading.Event()
-_pause_event.set()
-
-
-def dd_flash(iso_path: Path, device_path: str, emit):
-    _cancel_event.clear()
-    _pause_event.set()
-
-    emit("log", msg=f"Starting DD mode: {iso_path.name}")
-
-    CHUNK = 4 * 1024 * 1024
-
-    size = iso_path.stat().st_size
-    written = 0
-
-    last_written = 0
-    last_speed_time = time.time()
-
+def unmount_volume(drive_letter=None, device_path=None):
+    """
+    พยายาม lock + dismount volume ก่อนเขียน raw disk
+    """
     try:
-        handle = win32file.CreateFileW(
-            device_path,
+        if drive_letter:
+            path = f"\\\\.\\{drive_letter}:"
+        else:
+            path = device_path
+
+        handle = win32file.CreateFile(
+            path,
             win32file.GENERIC_READ | win32file.GENERIC_WRITE,
-            win32file.FILE_SHARE_READ |
-            win32file.FILE_SHARE_WRITE,
+            win32file.FILE_SHARE_READ | win32file.FILE_SHARE_WRITE,
             None,
             win32file.OPEN_EXISTING,
             0,
             None
         )
 
-        with open(iso_path, "rb") as f:
-            while True:
+        # lock volume
+        win32file.DeviceIoControl(
+            handle,
+            winioctlcon.FSCTL_LOCK_VOLUME,
+            None,
+            0
+        )
 
-                if _cancel_event.is_set():
-                    emit("log", msg="Flash cancelled")
-                    break
+        # dismount volume
+        win32file.DeviceIoControl(
+            handle,
+            winioctlcon.FSCTL_DISMOUNT_VOLUME,
+            None,
+            0
+        )
 
-                _pause_event.wait()
-
-                chunk = f.read(CHUNK)
-
-                if not chunk:
-                    break
-
-                win32file.WriteFile(handle, chunk)
-
-                written += len(chunk)
-
-                now = time.time()
-
-                if now - last_speed_time >= 0.5:
-                    speed = int(
-                        (written - last_written)
-                        / (now - last_speed_time)
-                        / 1024
-                        / 1024
-                    )
-
-                    last_written = written
-                    last_speed_time = now
-                else:
-                    speed = 0
-
-                progress = int(
-                    written * 100 / size
-                )
-
-                emit(
-                    "progress",
-                    value=progress,
-                    speed=speed,
-                )
-
-        win32file.CloseHandle(handle)
-
-        emit("log", msg="Write completed")
+        return handle
 
     except Exception as e:
-        emit("error", msg=str(e))
+        print("[WARN] unmount failed:", e)
+        return None
 
 
-def cancel_flash():
-    _cancel_event.set()
-    _pause_event.set()
+def dd_write(image_path, physical_drive):
+    """
+    Write ISO/DD image to \\.\PHYSICALDRIVE*
+    """
+
+    if not os.path.exists(image_path):
+        raise FileNotFoundError(image_path)
+
+    # เปิด disk แบบ raw
+    handle = win32file.CreateFile(
+        physical_drive,
+        win32file.GENERIC_READ | win32file.GENERIC_WRITE,
+        win32file.FILE_SHARE_READ | win32file.FILE_SHARE_WRITE,
+        None,
+        win32file.OPEN_EXISTING,
+        win32file.FILE_FLAG_NO_BUFFERING | win32file.FILE_FLAG_WRITE_THROUGH,
+        None
+    )
+
+    file_size = os.path.getsize(image_path)
+    chunk_size = 4 * 1024 * 1024  # 4MB buffer
+
+    written = 0
+
+    with open(image_path, "rb") as f:
+        while True:
+            data = f.read(chunk_size)
+            if not data:
+                break
+
+            try:
+                win32file.WriteFile(handle, data)
+            except pywintypes.error as e:
+                print("[ERROR] Write failed:", e)
+                print("Retrying in 1s...")
+                time.sleep(1)
+                continue
+
+            written += len(data)
+            progress = (written / file_size) * 100
+            print(f"\rProgress: {progress:.2f}%", end="")
+
+    handle.close()
+    print("\nDone ✔")
 
 
-def pause_flash():
-    _pause_event.clear()
+def safe_flash(image_path, physical_drive):
+    """
+    wrapper: ลดปัญหา Windows lock USB
+    """
 
+    print("[*] Preparing device...")
 
-def resume_flash():
-    _pause_event.set()
+    # พยายามปลด volume ก่อน
+    unmount_volume(device_path=physical_drive)
+
+    time.sleep(2)
+
+    print("[*] Start writing...")
+    dd_write(image_path, physical_drive)
