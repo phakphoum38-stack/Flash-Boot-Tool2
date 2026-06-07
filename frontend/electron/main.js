@@ -8,7 +8,7 @@ let mainWindow = null
 let flashProc = null
 
 // =========================
-// SAFE SEND
+// SAFE SEND (CRASH PROTECT)
 // =========================
 function safeSend(win, channel, data) {
   try {
@@ -59,16 +59,16 @@ function createWindow() {
 }
 
 // =========================
-// DISK RESOLVER (RUFUS V2 CORE)
+// DISK RESOLVER (SAFE)
 // =========================
 function resolveDiskIndex(device) {
-  const match = device.match(/PhysicalDrive(\d+)/)
-  if (!match) throw new Error("Invalid device: must be PhysicalDriveX")
-  return Number(match[1])
+  const m = device.match(/PhysicalDrive(\d+)/)
+  if (!m) throw new Error("Invalid PhysicalDrive format")
+  return Number(m[1])
 }
 
 // =========================
-// OFFLINE DISK (CRITICAL FIX)
+// OFFLINE DISK (RUFUS STYLE)
 // =========================
 function offlineDisk(device) {
   try {
@@ -82,7 +82,7 @@ function offlineDisk(device) {
       } catch {}
     "`)
   } catch (e) {
-    console.log("offlineDisk error:", e.message)
+    console.log("offlineDisk:", e.message)
   }
 }
 
@@ -103,7 +103,7 @@ function onlineDisk(device) {
 }
 
 // =========================
-// USB CACHE (FIXED MAPPING)
+// USB LIST (FIXED INDEX MAPPING)
 // =========================
 let usbCache = []
 let lastUsbTime = 0
@@ -125,7 +125,7 @@ async function getUsbDevices() {
     const arr = Array.isArray(data) ? data : [data]
 
     usbCache = arr.map(d => ({
-      path: `\\\\.\\PhysicalDrive${d.Index}`, // 🔥 FIXED (REAL RUFUS STYLE)
+      path: `\\\\.\\PhysicalDrive${d.Index}`,
       name: d.Model || "USB",
       size: Number(d.Size || 0)
     }))
@@ -145,7 +145,31 @@ ipcMain.handle("get-usb-devices", async () => {
 })
 
 // =========================
-// FLASH ENGINE (RUFUS V2 PIPELINE)
+// IPC: ISO PICKER (FIXED)
+// =========================
+ipcMain.handle("select-iso", async () => {
+  try {
+    const win = BrowserWindow.getFocusedWindow() || mainWindow
+
+    const result = await dialog.showOpenDialog(win, {
+      properties: ["openFile"],
+      filters: [
+        { name: "ISO Image", extensions: ["iso", "img"] }
+      ],
+      title: "Select ISO file",
+      defaultPath: app.getPath("desktop")
+    })
+
+    if (result.canceled) return null
+    return result.filePaths[0]
+  } catch (err) {
+    console.log("ISO ERROR:", err)
+    return null
+  }
+})
+
+// =========================
+// FLASH ENGINE (STABLE PIPELINE)
 // =========================
 ipcMain.handle("flash-iso", async (event, mode, iso, device) => {
   try {
@@ -159,17 +183,14 @@ ipcMain.handle("flash-iso", async (event, mode, iso, device) => {
       return { success: false }
     }
 
-    // 🔥 SAFETY CHECK
     if (!device.includes("PhysicalDrive")) {
       throw new Error("Invalid device format")
     }
 
-    // 🔥 STEP 1: OFFLINE DISK
+    // 🔥 OFFLINE DISK BEFORE FLASH
     offlineDisk(device)
-
     await new Promise(r => setTimeout(r, 800))
 
-    // 🔥 STEP 2: SPAWN BACKEND
     flashProc = spawn(
       backend,
       [mode, iso, device],
@@ -230,7 +251,6 @@ ipcMain.handle("flash-iso", async (event, mode, iso, device) => {
     })
 
     flashProc.on("close", (code) => {
-      // 🔥 STEP 3: RESTORE DISK
       onlineDisk(device)
 
       safeSend(mainWindow, "flash-event", {
@@ -266,7 +286,7 @@ ipcMain.handle("flash-iso", async (event, mode, iso, device) => {
 })
 
 // =========================
-// CANCEL
+// CANCEL FLASH
 // =========================
 ipcMain.on("cancel-flash", () => {
   if (flashProc) {
