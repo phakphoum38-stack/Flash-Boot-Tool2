@@ -2,8 +2,10 @@ name: Build Flash Boot Tool
 
 on:
   push:
-    branches: [ main ]
-    tags: [ "v*" ]
+    branches:
+      - main
+    tags:
+      - "v*"
 
 jobs:
   build-win:
@@ -13,6 +15,9 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      # =========================
+      # PYTHON BACKEND BUILD
+      # =========================
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
@@ -22,11 +27,14 @@ jobs:
         working-directory: ./backend
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt
-          pip install pyinstaller pywin32
-          python -m pywin32_postinstall -install
 
-      - name: Build backend.exe (PyInstaller FIXED)
+          # ❌ FIX: no plistlib (built-in, removed from requirements)
+          pip install -r requirements.txt
+
+          # install build tools
+          pip install pyinstaller pywin32
+
+      - name: Build backend.exe
         working-directory: ./backend
         run: |
           pyinstaller main.py ^
@@ -38,19 +46,30 @@ jobs:
             --hidden-import=win32api ^
             --hidden-import=winioctlcon
 
-      - name: Setup Node (SAFE VERSION)
+      # =========================
+      # NODE / FRONTEND BUILD
+      # =========================
+      - name: Setup Node
         uses: actions/setup-node@v4
         with:
           node-version: "20"
 
       - name: Install frontend deps
         working-directory: ./frontend
-        run: npm install
+        run: |
+          npm config set fetch-retries 5
+          npm config set fetch-retry-factor 2
+          npm config set fetch-retry-mintimeout 20000
+          npm config set fetch-retry-maxtimeout 120000
+          npm install
 
       - name: Build React
         working-directory: ./frontend
         run: npm run build
 
+      # =========================
+      # PACKAGE BACKEND INTO FRONTEND
+      # =========================
       - name: Prepare resources
         working-directory: ./frontend
         shell: pwsh
@@ -58,26 +77,36 @@ jobs:
           New-Item -ItemType Directory -Force resources/backend
           New-Item -ItemType Directory -Force resources/ventoy
 
-      - name: Copy backend.exe (SAFE CHECK)
+      - name: Copy backend.exe
         shell: pwsh
         run: |
           if (Test-Path backend\dist\backend.exe) {
             Copy-Item backend\dist\backend.exe frontend\resources\backend\backend.exe
           } else {
-            Write-Error "backend.exe not found!"
+            Write-Error "backend.exe not found"
             exit 1
           }
 
+      # =========================
+      # ELECTRON BUILD
+      # =========================
       - name: Build Electron Windows
         working-directory: ./frontend
         run: npm run dist
 
+      # =========================
+      # ARTIFACT
+      # =========================
       - name: Upload Windows Artifact
         uses: actions/upload-artifact@v4
         with:
           name: Flash-Boot-Tool-win-${{ github.run_number }}
           path: frontend/dist/*.exe
+          if-no-files-found: error
 
+  # =========================
+  # MAC BUILD (CLEANED)
+  # =========================
   build-mac:
     runs-on: macos-latest
     needs: build-win
@@ -103,7 +132,7 @@ jobs:
           CSC_IDENTITY_AUTO_DISCOVERY: "false"
         run: npm run dist -- --mac
 
-      - name: Package output
+      - name: Package Mac output
         working-directory: ./frontend/dist
         run: |
           mkdir -p package
@@ -119,4 +148,4 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: Flash-Boot-Tool-mac-${{ github.run_number }}
-          path: frontend/dist/
+          path: frontend/dist/*
