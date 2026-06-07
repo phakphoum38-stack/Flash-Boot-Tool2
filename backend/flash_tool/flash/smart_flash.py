@@ -13,6 +13,9 @@ FILE_ATTRIBUTE_NORMAL = 0x80
 FILE_SHARE_READ = 0x00000001
 FILE_SHARE_WRITE = 0x00000002
 
+FSCTL_LOCK_VOLUME = 0x00090018
+FSCTL_DISMOUNT_VOLUME = 0x00090020
+
 CHUNK = 4 * 1024 * 1024
 MIN_CHUNK = 512 * 1024
 
@@ -22,9 +25,13 @@ def smart_flash(image_path, device, emit=None):
     written = 0
     chunk = CHUNK
 
+    if "PhysicalDrive" not in device:
+        raise RuntimeError("Use \\\\.\\PhysicalDriveX only")
+
     CreateFileW = kernel32.CreateFileW
     WriteFile = kernel32.WriteFile
     CloseHandle = kernel32.CloseHandle
+    DeviceIoControl = kernel32.DeviceIoControl
 
     handle = CreateFileW(
         device,
@@ -39,6 +46,10 @@ def smart_flash(image_path, device, emit=None):
     if handle == wintypes.HANDLE(-1).value:
         raise RuntimeError("USB locked or no permission")
 
+    # 🔥 LOCK + DISMOUNT (critical fix)
+    DeviceIoControl(handle, FSCTL_LOCK_VOLUME, None, 0, None, 0, ctypes.byref(wintypes.DWORD()), None)
+    DeviceIoControl(handle, FSCTL_DISMOUNT_VOLUME, None, 0, None, 0, ctypes.byref(wintypes.DWORD()), None)
+
     with open(image_path, "rb") as f:
         while True:
             data = f.read(chunk)
@@ -47,23 +58,42 @@ def smart_flash(image_path, device, emit=None):
 
             bytes_written = wintypes.DWORD(0)
 
-            ok = WriteFile(handle, data, len(data), ctypes.byref(bytes_written), None)
+            ok = WriteFile(
+                handle,
+                data,
+                len(data),
+                ctypes.byref(bytes_written),
+                None
+            )
 
-            if not ok:
-                time.sleep(0.3)
-                chunk = max(MIN_CHUNK, chunk // 2)
+            err = ctypes.get_last_error()
 
-                if emit:
-                    emit("log", msg="Retry + reduce chunk")
+            # 🔥 FIX 1: handle failure properly
+            if not ok or bytes_written.value == 0:
+                if err == 5:
+                    time.sleep(0.5)
+                    chunk = max(MIN_CHUNK, chunk // 2)
 
-                continue
+                    if emit:
+                        emit("log", msg=f"BUSY retry (err=5), chunk={chunk}")
+
+                    continue
+
+                raise RuntimeError(f"Write failed: {err}")
 
             written += bytes_written.value
 
+            # 🔥 progress safe
             if emit:
-                emit("progress", value=written / size * 100)
+                try:
+                    emit("progress", value=written / size * 100)
+                except:
+                    pass
 
     CloseHandle(handle)
 
     if emit:
-        emit("log", msg="SMART COMPLETE")
+        try:
+            emit("log", msg="SMART COMPLETE")
+        except:
+            pass
