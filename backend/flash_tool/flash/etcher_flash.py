@@ -1,99 +1,41 @@
-from pathlib import Path
+import os
 import win32file
+import pywintypes
 
-from flash_tool.flash.dd_flash import dd_flash
+CHUNK = 4 * 1024 * 1024
 
 
-def verify_flash(iso_path: Path, device_path: str, emit):
+def etcher_flash(image_path, physical_drive, progress_cb=None):
+    if not os.path.exists(image_path):
+        raise FileNotFoundError(image_path)
 
-    CHUNK = 4 * 1024 * 1024
-
-    size = iso_path.stat().st_size
-    verified = 0
-
-    emit(
-        "log",
-        level="info",
-        msg="Verifying written data..."
+    handle = win32file.CreateFile(
+        physical_drive,
+        win32file.GENERIC_READ | win32file.GENERIC_WRITE,
+        win32file.FILE_SHARE_READ | win32file.FILE_SHARE_WRITE,
+        None,
+        win32file.OPEN_EXISTING,
+        win32file.FILE_FLAG_WRITE_THROUGH,
+        None
     )
 
-    handle = None
+    total = os.path.getsize(image_path)
+    written = 0
 
-    try:
+    with open(image_path, "rb") as f:
+        while True:
+            data = f.read(CHUNK)
+            if not data:
+                break
 
-        handle = win32file.CreateFileW(
-            device_path,
-            win32file.GENERIC_READ,
-            win32file.FILE_SHARE_READ | win32file.FILE_SHARE_WRITE,
-            None,
-            win32file.OPEN_EXISTING,
-            0,
-            None
-        )
+            try:
+                win32file.WriteFile(handle, data)
+            except pywintypes.error as e:
+                raise RuntimeError(f"Write failed: {e}")
 
-        with open(iso_path, "rb") as iso:
+            written += len(data)
 
-            while True:
+            if progress_cb:
+                progress_cb(written / total * 100)
 
-                iso_chunk = iso.read(CHUNK)
-
-                if not iso_chunk:
-                    break
-
-                _, usb_chunk = win32file.ReadFile(
-                    handle,
-                    len(iso_chunk)
-                )
-
-                verified += len(iso_chunk)
-
-                progress = int(
-                    verified * 100 / size
-                )
-
-                emit(
-                    "verify_progress",
-                    value=progress
-                )
-
-        emit(
-            "log",
-            level="info",
-            msg="Verification successful"
-        )
-
-    finally:
-
-        if handle:
-            win32file.CloseHandle(handle)
-
-
-def etcher_flash(
-    iso_path: Path,
-    device_path: str,
-    emit
-):
-    emit(
-        "log",
-        level="info",
-        msg="Etcher Mode Started"
-    )
-
-    dd_flash(
-        iso_path,
-        device_path,
-        emit
-    )
-
-    verify_flash(
-        iso_path,
-        device_path,
-        emit
-    )
-
-    emit(
-        "log",
-        level="info",
-        msg="Etcher Mode Completed"
-    )
-    )
+    handle.close()
