@@ -1,8 +1,10 @@
 #pragma once
 #include <string>
 
-struct State {
-    long long offset;
-    bool done;
-    bool bad;
+struct FlashState {
+    unsigned long long offset = 0;
+    unsigned long long total = 0;
+    std::string iso;
+    std::string device;
+    bool verified = false;
 };
