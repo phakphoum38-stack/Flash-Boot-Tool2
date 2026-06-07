@@ -24,15 +24,15 @@ def dd_flash(iso_path: Path, device_path: str, emit):
 
     try:
         handle = win32file.CreateFileW(
-    device_path,
-    win32file.GENERIC_READ | win32file.GENERIC_WRITE,
-    win32file.FILE_SHARE_READ |
-    win32file.FILE_SHARE_WRITE,
-    None,
-    win32file.OPEN_EXISTING,
-    0,
-    None
-)
+            device_path,
+            win32file.GENERIC_READ | win32file.GENERIC_WRITE,
+            win32file.FILE_SHARE_READ |
+            win32file.FILE_SHARE_WRITE,
+            None,
+            win32file.OPEN_EXISTING,
+            0,
+            None
+        )
 
         with open(iso_path, "rb") as f:
             while True:
