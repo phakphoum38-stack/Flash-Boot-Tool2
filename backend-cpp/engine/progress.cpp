@@ -1,5 +1,5 @@
 #include <iostream>
 
-void progress(double p) {
-    std::cout << "PROGRESS:" << p << std::endl;
+void emitProgress(double mb) {
+    std::cout << "PROGRESS:" << mb << std::endl;
 }
