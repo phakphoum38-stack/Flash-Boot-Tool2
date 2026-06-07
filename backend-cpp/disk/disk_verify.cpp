@@ -1,7 +1,7 @@
 #include <windows.h>
 #include <cstring>
 
-bool verifySector(HANDLE h, BYTE* data, DWORD size) {
+bool verifyBuffer(HANDLE h, BYTE* data, DWORD size) {
     BYTE* buf = new BYTE[size];
     DWORD read = 0;
 
