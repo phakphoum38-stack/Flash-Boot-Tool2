@@ -1,16 +1,15 @@
 import os
 import win32file
-import pywintypes
-
-CHUNK = 4 * 1024 * 1024
 
 
-def etcher_flash(image_path, physical_drive, progress_cb=None):
-    if not os.path.exists(image_path):
-        raise FileNotFoundError(image_path)
+def etcher_flash(image_path, device, emit=None):
+    CHUNK = 4 * 1024 * 1024
+
+    size = os.path.getsize(image_path)
+    written = 0
 
     handle = win32file.CreateFile(
-        physical_drive,
+        device,
         win32file.GENERIC_READ | win32file.GENERIC_WRITE,
         win32file.FILE_SHARE_READ | win32file.FILE_SHARE_WRITE,
         None,
@@ -19,23 +18,20 @@ def etcher_flash(image_path, physical_drive, progress_cb=None):
         None
     )
 
-    total = os.path.getsize(image_path)
-    written = 0
-
     with open(image_path, "rb") as f:
         while True:
             data = f.read(CHUNK)
             if not data:
                 break
 
-            try:
-                win32file.WriteFile(handle, data)
-            except pywintypes.error as e:
-                raise RuntimeError(f"Write failed: {e}")
+            win32file.WriteFile(handle, data)
 
             written += len(data)
 
-            if progress_cb:
-                progress_cb(written / total * 100)
+            if emit:
+                emit("progress", value=written / size * 100)
 
     handle.close()
+
+    if emit:
+        emit("log", msg="Etcher complete")
