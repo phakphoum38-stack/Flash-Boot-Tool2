@@ -1,5 +1,5 @@
 #include <iostream>
 
-void emitProgress(double p) {
-    std::cout << "PROGRESS:" << p << std::endl;
+void emitProgress(double percent) {
+    std::cout << "PROGRESS:" << percent << std::endl;
 }
