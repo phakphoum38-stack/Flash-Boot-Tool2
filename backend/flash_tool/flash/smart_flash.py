@@ -1,93 +1,62 @@
-import re
-import shutil
+import os
+import ctypes
+from ctypes import wintypes
 import time
-from pathlib import Path
-from flash_tool.usb.utils import (
-    extract_device_number, 
-    run_diskpart, 
-    get_drive_letter
-)
 
-def smart_flash(iso_path: Path, device_path: str, emit):
-    emit("log", level="info", msg=f"Starting Smart mode for {iso_path.name}")
-    device_num = extract_device_number(device_path)
-    
-    # 1. Clean
-    emit("log", level="info", msg="Cleaning USB device...")
-    run_diskpart(f"select disk {device_num}\nclean\nconvert gpt\n")
-    
-    # 2. Create partition
-    emit("log", level="info", msg="Creating FAT32 partition...")
-    run_diskpart(f"""
-    select disk {device_num}
-    create partition primary
-    format fs=fat32 quick label=FLASH
-    assign
-    exit
-    """)
-    
-    time.sleep(2)
-    drive_letter = get_drive_letter(device_num)
-    if not drive_letter:
-        raise Exception("Failed to get drive letter")
-    
-    emit("log", level="info", msg=f"Mounted to {drive_letter}:")
-    
-    # 3. Mount ISO
-    emit("log", level="info", msg="Mounting ISO...")
-    iso_drive = mount_iso(iso_path)
-    
-    try:
-        emit("log", level="info", msg="Copying files...")
-        copy_files(f"{iso_drive}:\\", f"{drive_letter}:\\", emit)
-        
-        emit("log", level="info", msg="Installing bootloader...")
-        install_bootloader(drive_letter, emit)
-        
-    finally:
-        unmount_iso(iso_path)
-        emit("log", level="info", msg="Smart flash completed")
-        emit("result", success=True, msg="Smart flash completed")
+kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
 
-def mount_iso(iso_path: Path):
-    import subprocess
-    result = subprocess.run(
-        ['powershell', 'Mount-DiskImage', '-ImagePath', str(iso_path), '-PassThru'],
-        capture_output=True, text=True
+GENERIC_READ = 0x80000000
+GENERIC_WRITE = 0x40000000
+OPEN_EXISTING = 3
+FILE_ATTRIBUTE_NORMAL = 0x80
+
+CHUNK = 4 * 1024 * 1024
+MIN_CHUNK = 512 * 1024
+
+
+def smart_flash(image_path, device, emit=None):
+    size = os.path.getsize(image_path)
+    written = 0
+    chunk = CHUNK
+
+    CreateFileW = kernel32.CreateFileW
+    WriteFile = kernel32.WriteFile
+    CloseHandle = kernel32.CloseHandle
+
+    handle = CreateFileW(
+        device,
+        GENERIC_READ | GENERIC_WRITE,
+        0,
+        None,
+        OPEN_EXISTING,
+        FILE_ATTRIBUTE_NORMAL,
+        None
     )
-    match = re.search(r'DriveLetter\s+:\s+(\w)', result.stdout)
-    if not match:
-        raise Exception("Failed to mount ISO")
-    return match.group(1)
 
-def unmount_iso(iso_path: Path):
-    import subprocess
-    subprocess.run(['powershell', 'Dismount-DiskImage', '-ImagePath', str(iso_path)], capture_output=True)
+    if handle == wintypes.HANDLE(-1).value:
+        raise RuntimeError("Failed to open device")
 
-def copy_files(src: str, dst: str, emit):
-    import shutil
-    total = sum(1 for _ in Path(src).rglob('*'))
-    copied = 0
-    for item in Path(src).rglob('*'):
-        rel = item.relative_to(src)
-        target = Path(dst) / rel
-        if item.is_dir():
-            target.mkdir(parents=True, exist_ok=True)
-        else:
-            target.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copy2(item, target)
-        copied += 1
-        if copied % 200 == 0 or copied == total:
-            progress = int(copied * 100 / total)
-            emit("progress", value=progress, written=copied, total=total)
+    with open(image_path, "rb") as f:
+        while True:
+            data = f.read(chunk)
+            if not data:
+                break
 
-def install_bootloader(drive_letter: str, emit):
-    import shutil
-    efi_path = Path(f"{drive_letter}:\\EFI\\BOOT")
-    efi_path.mkdir(parents=True, exist_ok=True)
-    grub_src = Path(__file__).parent.parent / "resources" / "grubx64.efi"
-    if grub_src.exists():
-        shutil.copy2(grub_src, efi_path / "bootx64.efi")
-        emit("log", level="info", msg="Bootloader installed")
-    else:
-        emit("log", level="warn", msg="grubx64.efi not found, skipping bootloader")
+            bytes_written = wintypes.DWORD(0)
+
+            ok = WriteFile(handle, data, len(data), ctypes.byref(bytes_written), None)
+
+            if not ok:
+                time.sleep(0.2)
+                chunk = max(MIN_CHUNK, chunk // 2)
+                continue
+
+            written += bytes_written.value
+
+            if emit:
+                emit("progress", value=written / size * 100)
+
+    CloseHandle(handle)
+
+    if emit:
+        emit("log", msg="SMART complete (pure API)")
