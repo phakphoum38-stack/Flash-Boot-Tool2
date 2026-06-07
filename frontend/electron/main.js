@@ -1,14 +1,13 @@
 const { app, BrowserWindow, ipcMain, dialog } = require("electron")
-const { spawn } = require("child_process")
+const { spawn, execSync } = require("child_process")
 const path = require("path")
 const fs = require("fs")
-const { execSync } = require("child_process")
 
 let mainWindow = null
 let flashProc = null
 
 // =========================
-// SAFE SEND (CRASH PROTECT)
+// SAFE SEND (CRASH PROOF)
 // =========================
 function safeSend(win, channel, data) {
   try {
@@ -64,21 +63,24 @@ function createWindow() {
 function resolveDiskIndex(device) {
   const m = device.match(/PhysicalDrive(\d+)/)
   if (!m) throw new Error("Invalid PhysicalDrive format")
-  return Number(m[1])
+
+  const index = Number(m[1])
+  if (index === 0) throw new Error("BLOCKED SYSTEM DISK")
+
+  return index
 }
 
 // =========================
-// OFFLINE DISK (RUFUS STYLE)
+// DISK LOCK (RUFUS STYLE SAFE)
 // =========================
 function offlineDisk(device) {
   try {
     const index = resolveDiskIndex(device)
 
-    execSync(`
-      powershell -NoProfile -Command "
+    execSync(`powershell -NoProfile -Command "
       try {
-        Set-Disk -Number ${index} -IsOffline $true
-        Clear-Disk -Number ${index} -RemoveData -Confirm:$false
+        Set-Disk -Number ${index} -IsReadOnly $false -ErrorAction SilentlyContinue
+        Set-Disk -Number ${index} -IsOffline $true -ErrorAction SilentlyContinue
       } catch {}
     "`)
   } catch (e) {
@@ -87,23 +89,22 @@ function offlineDisk(device) {
 }
 
 // =========================
-// ONLINE RESTORE
+// RESTORE DISK
 // =========================
 function onlineDisk(device) {
   try {
     const index = resolveDiskIndex(device)
 
-    execSync(`
-      powershell -NoProfile -Command "
+    execSync(`powershell -NoProfile -Command "
       try {
-        Set-Disk -Number ${index} -IsOffline $false
+        Set-Disk -Number ${index} -IsOffline $false -ErrorAction SilentlyContinue
       } catch {}
     "`)
   } catch {}
 }
 
 // =========================
-// USB LIST (FIXED INDEX MAPPING)
+// USB LIST (FIXED STABLE)
 // =========================
 let usbCache = []
 let lastUsbTime = 0
@@ -124,8 +125,10 @@ async function getUsbDevices() {
     const data = JSON.parse(out)
     const arr = Array.isArray(data) ? data : [data]
 
-    usbCache = arr.map(d => ({
-      path: `\\\\.\\PhysicalDrive${d.Index}`,
+    usbCache = arr.map((d, i) => ({
+      path: d.Index !== undefined
+        ? `\\\\.\\PhysicalDrive${d.Index}`
+        : `\\\\.\\PhysicalDrive${i}`,
       name: d.Model || "USB",
       size: Number(d.Size || 0)
     }))
@@ -138,14 +141,12 @@ async function getUsbDevices() {
 }
 
 // =========================
-// IPC: USB
+// IPC USB
 // =========================
-ipcMain.handle("get-usb-devices", async () => {
-  return getUsbDevices()
-})
+ipcMain.handle("get-usb-devices", async () => getUsbDevices())
 
 // =========================
-// IPC: ISO PICKER (FIXED)
+// ISO PICKER (FIXED)
 // =========================
 ipcMain.handle("select-iso", async () => {
   try {
@@ -153,23 +154,20 @@ ipcMain.handle("select-iso", async () => {
 
     const result = await dialog.showOpenDialog(win, {
       properties: ["openFile"],
-      filters: [
-        { name: "ISO Image", extensions: ["iso", "img"] }
-      ],
-      title: "Select ISO file",
+      filters: [{ name: "ISO Image", extensions: ["iso", "img"] }],
+      title: "Select ISO",
       defaultPath: app.getPath("desktop")
     })
 
     if (result.canceled) return null
     return result.filePaths[0]
-  } catch (err) {
-    console.log("ISO ERROR:", err)
+  } catch {
     return null
   }
 })
 
 // =========================
-// FLASH ENGINE (STABLE PIPELINE)
+// FLASH ENGINE (RUFUS STABLE PIPELINE)
 // =========================
 ipcMain.handle("flash-iso", async (event, mode, iso, device) => {
   try {
@@ -183,27 +181,29 @@ ipcMain.handle("flash-iso", async (event, mode, iso, device) => {
       return { success: false }
     }
 
-    if (!device.includes("PhysicalDrive")) {
+    if (!device?.includes("PhysicalDrive")) {
       throw new Error("Invalid device format")
     }
 
-    // 🔥 OFFLINE DISK BEFORE FLASH
+    // 🔥 LOCK DISK
     offlineDisk(device)
-    await new Promise(r => setTimeout(r, 800))
+    await new Promise(r => setTimeout(r, 1000))
 
-    flashProc = spawn(
-      backend,
-      [mode, iso, device],
-      {
-        windowsHide: true,
-        shell: false
-      }
-    )
+    flashProc = spawn(backend, [mode, iso, device], {
+      windowsHide: true,
+      shell: true,
+      stdio: ["ignore", "pipe", "pipe"]
+    })
 
     let buffer = ""
+    const MAX_BUFFER = 128 * 1024
 
     flashProc.stdout.on("data", (data) => {
       buffer += data.toString()
+
+      if (buffer.length > MAX_BUFFER) {
+        buffer = buffer.slice(-MAX_BUFFER)
+      }
 
       const lines = buffer.split(/\r?\n/)
       buffer = lines.pop() || ""
@@ -227,13 +227,6 @@ ipcMain.handle("flash-iso", async (event, mode, iso, device) => {
           })
         }
 
-        else if (msg.startsWith("LOG:")) {
-          safeSend(mainWindow, "flash-event", {
-            type: "log",
-            msg: msg.replace("LOG:", "").trim()
-          })
-        }
-
         else {
           safeSend(mainWindow, "flash-event", {
             type: "log",
@@ -251,7 +244,7 @@ ipcMain.handle("flash-iso", async (event, mode, iso, device) => {
     })
 
     flashProc.on("close", (code) => {
-      onlineDisk(device)
+      try { onlineDisk(device) } catch {}
 
       safeSend(mainWindow, "flash-event", {
         type: "result",
@@ -262,7 +255,7 @@ ipcMain.handle("flash-iso", async (event, mode, iso, device) => {
     })
 
     flashProc.on("error", (err) => {
-      onlineDisk(device)
+      try { onlineDisk(device) } catch {}
 
       safeSend(mainWindow, "flash-event", {
         type: "error",
@@ -273,8 +266,9 @@ ipcMain.handle("flash-iso", async (event, mode, iso, device) => {
     })
 
     return { success: true }
+
   } catch (err) {
-    onlineDisk(device)
+    try { onlineDisk(device) } catch {}
 
     safeSend(mainWindow, "flash-event", {
       type: "error",
