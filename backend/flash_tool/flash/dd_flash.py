@@ -7,133 +7,91 @@ _cancel_event = threading.Event()
 _pause_event = threading.Event()
 _pause_event.set()
 
+
 def dd_flash(iso_path: Path, device_path: str, emit):
-_cancel_event.clear()
-_pause_event.set()
+    _cancel_event.clear()
+    _pause_event.set()
 
-```
-emit(
-    "log",
-    level="info",
-    msg=f"Starting DD flash: {iso_path.name}"
-)
+    emit("log", msg=f"Starting DD mode: {iso_path.name}")
 
-emit(
-    "log",
-    level="info",
-    msg=f"Device: {device_path}"
-)
+    CHUNK = 4 * 1024 * 1024
 
-CHUNK_SIZE = 4 * 1024 * 1024
-
-try:
     size = iso_path.stat().st_size
-
-    handle = win32file.CreateFile(
-        device_path,
-        win32file.GENERIC_WRITE,
-        win32file.FILE_SHARE_READ |
-        win32file.FILE_SHARE_WRITE,
-        None,
-        win32file.OPEN_EXISTING,
-        0,
-        None
-    )
-
     written = 0
+
     last_written = 0
     last_speed_time = time.time()
 
-    with open(iso_path, "rb") as iso_file:
+    try:
+        handle = win32file.CreateFileW(
+            device_path,
+            win32file.GENERIC_WRITE,
+            0,
+            None,
+            win32file.OPEN_EXISTING,
+            win32file.FILE_ATTRIBUTE_NORMAL,
+            None,
+        )
 
-        while True:
+        with open(iso_path, "rb") as f:
+            while True:
 
-            if _cancel_event.is_set():
+                if _cancel_event.is_set():
+                    emit("log", msg="Flash cancelled")
+                    break
+
+                _pause_event.wait()
+
+                chunk = f.read(CHUNK)
+
+                if not chunk:
+                    break
+
+                win32file.WriteFile(handle, chunk)
+
+                written += len(chunk)
+
+                now = time.time()
+
+                if now - last_speed_time >= 0.5:
+                    speed = int(
+                        (written - last_written)
+                        / (now - last_speed_time)
+                        / 1024
+                        / 1024
+                    )
+
+                    last_written = written
+                    last_speed_time = now
+                else:
+                    speed = 0
+
+                progress = int(
+                    written * 100 / size
+                )
+
                 emit(
-                    "log",
-                    level="warn",
-                    msg="Flash cancelled"
+                    "progress",
+                    value=progress,
+                    speed=speed,
                 )
 
-                win32file.CloseHandle(handle)
-                return
+        win32file.CloseHandle(handle)
 
-            _pause_event.wait()
+        emit("log", msg="Write completed")
 
-            chunk = iso_file.read(CHUNK_SIZE)
+    except Exception as e:
+        emit("error", msg=str(e))
 
-            if not chunk:
-                break
-
-            win32file.WriteFile(
-                handle,
-                chunk
-            )
-
-            written += len(chunk)
-
-            now = time.time()
-
-            if now - last_speed_time >= 0.5:
-
-                speed = int(
-                    (written - last_written)
-                    /
-                    (now - last_speed_time)
-                    /
-                    1024
-                    /
-                    1024
-                )
-
-                last_written = written
-                last_speed_time = now
-
-            else:
-                speed = 0
-
-            progress = int(
-                written * 100 / size
-            )
-
-            emit(
-                "progress",
-                value=progress,
-                written=written,
-                total=size,
-                speed=speed
-            )
-
-    win32file.FlushFileBuffers(handle)
-    win32file.CloseHandle(handle)
-
-    emit(
-        "progress",
-        value=100,
-        written=size,
-        total=size,
-        speed=0
-    )
-
-    emit(
-        "log",
-        level="info",
-        msg="Write completed"
-    )
-
-except Exception as e:
-    emit(
-        "error",
-        msg=str(e)
-    )
-```
 
 def cancel_flash():
-_cancel_event.set()
-_pause_event.set()
+    _cancel_event.set()
+    _pause_event.set()
+
 
 def pause_flash():
-_pause_event.clear()
+    _pause_event.clear()
+
 
 def resume_flash():
-_pause_event.set()
+    _pause_event.set()
