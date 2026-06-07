@@ -1,24 +1,16 @@
 #include <windows.h>
 
-bool retryWrite(HANDLE disk, char* data, size_t size) {
-
+bool retryWrite(HANDLE h, BYTE* data, DWORD size) {
+    int retries = 5;
     DWORD written;
 
-    for (int i = 0; i < 3; i++) {
+    while (retries--) {
+        BOOL ok = WriteFile(h, data, size, &written, NULL);
 
-        if (WriteFile(disk, data, (DWORD)size, &written, NULL))
+        if (ok && written == size)
             return true;
 
-        DWORD err = GetLastError();
-
-        if (err == ERROR_IO_DEVICE ||
-            err == ERROR_NOT_READY) {
-
-            Sleep(50);
-            continue;
-        }
-
-        return false;
+        Sleep(50);
     }
 
     return false;
