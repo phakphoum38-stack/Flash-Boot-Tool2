@@ -1,13 +1,8 @@
 #include <windows.h>
 
-bool writeDisk(HANDLE h, BYTE* buffer, DWORD size) {
-    DWORD written = 0;
+bool writeRaw(HANDLE disk, void* data, size_t size) {
 
-    return WriteFile(
-        h,
-        buffer,
-        size,
-        &written,
-        NULL
-    );
+    DWORD written;
+
+    return WriteFile(disk, data, (DWORD)size, &written, NULL);
 }
