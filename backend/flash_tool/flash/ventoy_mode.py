@@ -1,70 +1,34 @@
-import shutil
-from pathlib import Path
-from flash_tool.usb.utils import extract_device_number, wait_for_drive_label
+import os
+import win32file
 
-def ventoy_flash(iso_path: Path, device_path: str, emit):
-    device_num = extract_device_number(device_path)
-    
-    emit("log", level="info", msg="Installing Ventoy...")
-    install_ventoy(device_num, emit)
-    
-    emit("log", level="info", msg="Waiting for Ventoy partition...")
-    drive_letter = wait_for_drive_label("Ventoy", timeout=10)
-    
-    if not drive_letter:
-        raise Exception("Ventoy partition not found")
-    
-    emit("log", level="info", msg=f"Ventoy mounted at {drive_letter}:")
-    
-    emit("log", level="info", msg=f"Copying {iso_path.name} to Ventoy...")
-    dest_path = Path(f"{drive_letter}:\\") / iso_path.name
-    shutil.copy2(iso_path, dest_path)
-    
-    emit("progress", value=100, written=iso_path.stat().st_size, total=iso_path.stat().st_size)
-    emit("log", level="info", msg="Ventoy flash completed")
 
-def install_ventoy(device_num: str, emit):
-    import subprocess
-    ventoy_dir = (
-Path(**file**).parent.parent
-/ "resources"
-/ "ventoy"
-)
+def ventoy_mode(image_path, physical_drive, progress_cb=None):
+    CHUNK = 1024 * 1024  # เบากว่า etcher
 
-candidates = [
-ventoy_dir / "Ventoy2Disk_X64.exe",
-ventoy_dir / "Ventoy2Disk.exe"
-]
+    handle = win32file.CreateFile(
+        physical_drive,
+        win32file.GENERIC_READ | win32file.GENERIC_WRITE,
+        win32file.FILE_SHARE_READ | win32file.FILE_SHARE_WRITE,
+        None,
+        win32file.OPEN_EXISTING,
+        0,
+        None
+    )
 
-ventoy_exe = None
+    total = os.path.getsize(image_path)
+    written = 0
 
-for exe in candidates:
+    with open(image_path, "rb") as f:
+        while True:
+            data = f.read(CHUNK)
+            if not data:
+                break
 
-```
-if exe.exists():
+            win32file.WriteFile(handle, data)
 
-    ventoy_exe = exe
+            written += len(data)
 
-    break
-```
+            if progress_cb:
+                progress_cb(written / total * 100)
 
-if ventoy_exe is None:
-
-```
-raise FileNotFoundError(
-    "Ventoy executable not found"
-)
-```
-
-    
-    if not ventoy_exe.exists():
-        raise FileNotFoundError("Ventoy2Disk.exe not found in resources")
-    
-    cmd = [str(ventoy_exe), "-i", f"/Device/PhysicalDrive{device_num}", "-r", "0"]
-    emit("log", level="info", msg="Running Ventoy installer...")
-    result = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
-    
-    if result.returncode != 0:
-        raise Exception(f"Ventoy install failed: {result.stderr}")
-    
-    emit("log", level="info", msg="Ventoy installed successfully")
+    handle.close()
