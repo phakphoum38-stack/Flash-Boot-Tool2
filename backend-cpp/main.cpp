@@ -1,9 +1,11 @@
 #include <iostream>
-#include "engine/flash_engine.h"
+#include "engine/flash_engine_v4.cpp"
+#include "ipc/pipe_server.cpp"
 
-int main(int argc, char* argv[]) {
+int main(int argc, char** argv) {
+
     if (argc < 4) {
-        std::cout << "ERROR: usage <mode> <iso> <PhysicalDriveX>\n";
+        std::cout << "ERROR: usage <mode> <iso> <device>\n";
         return 1;
     }
 
@@ -11,8 +13,8 @@ int main(int argc, char* argv[]) {
     std::string iso = argv[2];
     std::string device = argv[3];
 
-    FlashEngine engine;
-    int result = engine.start(mode, iso, device);
+    PipeServer::init(); // start IPC listener
 
-    return result;
+    FlashEngineV4 engine;
+    return engine.start(mode, iso, device);
 }
