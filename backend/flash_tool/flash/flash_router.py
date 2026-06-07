@@ -2,21 +2,22 @@ from flash_tool.flash.dd_flash import dd_flash
 from flash_tool.flash.smart_flash import smart_flash
 from flash_tool.flash.ventoy_mode import ventoy_flash
 from flash_tool.flash.etcher_flash import etcher_flash
+from flash_tool.flash.rufus_v3 import rufus_v3_flash
 
 
-def flash_router(mode, image, device, emit=None):
-    mode = mode.lower()
+def flash_router(mode, image, device, cb=None):
 
+    # 🔥 NEW DEFAULT ENGINE (RUFUS V3)
     if mode == "dd":
-        return dd_flash(image, device, emit)
+        return rufus_v3_flash(image, device, cb)
 
     if mode == "smart":
-        return smart_flash(image, device, emit)
-
-    if mode == "ventoy":
-        return ventoy_flash(image, device, emit)
+        return rufus_v3_flash(image, device, cb)
 
     if mode == "etcher":
-        return etcher_flash(image, device, emit)
+        return rufus_v3_flash(image, device, cb)
 
-    raise Exception(f"Unknown mode: {mode}")
+    if mode == "ventoy":
+        return ventoy_flash(image, device, cb)
+
+    return rufus_v3_flash(image, device, cb)
