@@ -170,113 +170,48 @@ ipcMain.handle("select-iso", async () => {
 // FLASH ENGINE (RUFUS STABLE PIPELINE)
 // =========================
 ipcMain.handle("flash-iso", async (event, mode, iso, device) => {
-  try {
-    const backend = getBackendPath()
+  const backend = getBackendPath()
 
-    if (!fs.existsSync(backend)) {
-      safeSend(mainWindow, "flash-event", {
-        type: "error",
-        msg: "backend.exe not found"
-      })
-      return { success: false }
-    }
+  flashProc = spawn(backend, ["v6", iso, device], {
+    windowsHide: true,
+    shell: false
+  })
 
-    if (!device?.includes("PhysicalDrive")) {
-      throw new Error("Invalid device format")
-    }
+  let buffer = ""
 
-    // 🔥 LOCK DISK
-    offlineDisk(device)
-    await new Promise(r => setTimeout(r, 1000))
+  flashProc.stdout.on("data", (data) => {
+    buffer += data.toString()
 
-    flashProc = spawn(backend, [mode, iso, device], {
-      windowsHide: true,
-      shell: true,
-      stdio: ["ignore", "pipe", "pipe"]
-    })
+    const lines = buffer.split(/\r?\n/)
+    buffer = lines.pop() || ""
 
-    let buffer = ""
-    const MAX_BUFFER = 128 * 1024
+    for (const line of lines) {
+      const msg = line.trim()
 
-    flashProc.stdout.on("data", (data) => {
-      buffer += data.toString()
-
-      if (buffer.length > MAX_BUFFER) {
-        buffer = buffer.slice(-MAX_BUFFER)
+      if (msg.startsWith("PROGRESS:")) {
+        safeSend(mainWindow, "flash-event", {
+          type: "progress",
+          value: Number(msg.split(":")[1])
+        })
       }
 
-      const lines = buffer.split(/\r?\n/)
-      buffer = lines.pop() || ""
-
-      for (const line of lines) {
-        const msg = line.trim()
-
-        if (!mainWindow || mainWindow.isDestroyed()) return
-
-        if (msg.startsWith("PROGRESS:")) {
-          safeSend(mainWindow, "flash-event", {
-            type: "progress",
-            value: Number(msg.split(":")[1])
-          })
-        }
-
-        else if (msg.startsWith("VERIFY:")) {
-          safeSend(mainWindow, "flash-event", {
-            type: "verify",
-            value: Number(msg.split(":")[1])
-          })
-        }
-
-        else {
-          safeSend(mainWindow, "flash-event", {
-            type: "log",
-            msg
-          })
-        }
+      else if (msg.startsWith("LOG:")) {
+        safeSend(mainWindow, "flash-event", {
+          type: "log",
+          msg: msg.replace("LOG:", "")
+        })
       }
-    })
+    }
+  })
 
-    flashProc.stderr.on("data", (data) => {
-      safeSend(mainWindow, "flash-event", {
-        type: "error",
-        msg: data.toString()
-      })
-    })
-
-    flashProc.on("close", (code) => {
-      try { onlineDisk(device) } catch {}
-
-      safeSend(mainWindow, "flash-event", {
-        type: "result",
-        success: code === 0
-      })
-
-      flashProc = null
-    })
-
-    flashProc.on("error", (err) => {
-      try { onlineDisk(device) } catch {}
-
-      safeSend(mainWindow, "flash-event", {
-        type: "error",
-        msg: err.message
-      })
-
-      flashProc = null
-    })
-
-    return { success: true }
-
-  } catch (err) {
-    try { onlineDisk(device) } catch {}
-
+  flashProc.on("close", () => {
     safeSend(mainWindow, "flash-event", {
-      type: "error",
-      msg: err.message
+      type: "result",
+      success: true
     })
+  })
 
-    return { success: false }
-  }
+  return { success: true }
 })
 
 // =========================
