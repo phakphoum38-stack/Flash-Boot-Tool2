@@ -16,38 +16,40 @@ jobs:
         uses: actions/checkout@v4
 
       # =========================
-      # PYTHON BACKEND BUILD
+      # PYTHON BACKEND
       # =========================
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
 
-      - name: Install backend deps
+      - name: Install backend dependencies
         working-directory: ./backend
+        shell: pwsh
         run: |
           python -m pip install --upgrade pip
 
-          # ❌ FIX: no plistlib (built-in, removed from requirements)
+          # install runtime deps
           pip install -r requirements.txt
 
-          # install build tools
-          pip install pyinstaller pywin32
+          # build tools only
+          pip install pyinstaller
 
-      - name: Build backend.exe
+      - name: Build backend.exe (FIXED PYINSTALLER)
         working-directory: ./backend
+        shell: pwsh
         run: |
-          pyinstaller main.py ^
-            --onefile ^
-            --clean ^
-            --name backend ^
-            --hidden-import=pywintypes ^
-            --hidden-import=win32file ^
-            --hidden-import=win32api ^
-            --hidden-import=winioctlcon
+          pyinstaller main.py `
+            --onefile `
+            --clean `
+            --name backend `
+            --hidden-import=win32file `
+            --hidden-import=win32api `
+            --hidden-import=winioctlcon `
+            --hidden-import=pywintypes
 
       # =========================
-      # NODE / FRONTEND BUILD
+      # NODE / FRONTEND
       # =========================
       - name: Setup Node
         uses: actions/setup-node@v4
@@ -56,19 +58,14 @@ jobs:
 
       - name: Install frontend deps
         working-directory: ./frontend
-        run: |
-          npm config set fetch-retries 5
-          npm config set fetch-retry-factor 2
-          npm config set fetch-retry-mintimeout 20000
-          npm config set fetch-retry-maxtimeout 120000
-          npm install
+        run: npm install
 
       - name: Build React
         working-directory: ./frontend
         run: npm run build
 
       # =========================
-      # PACKAGE BACKEND INTO FRONTEND
+      # PACKAGING
       # =========================
       - name: Prepare resources
         working-directory: ./frontend
@@ -77,11 +74,11 @@ jobs:
           New-Item -ItemType Directory -Force resources/backend
           New-Item -ItemType Directory -Force resources/ventoy
 
-      - name: Copy backend.exe
+      - name: Copy backend.exe (SAFE)
         shell: pwsh
         run: |
           if (Test-Path backend\dist\backend.exe) {
-            Copy-Item backend\dist\backend.exe frontend\resources\backend\backend.exe
+            Copy-Item backend\dist\backend.exe frontend\resources\backend\backend.exe -Force
           } else {
             Write-Error "backend.exe not found"
             exit 1
@@ -97,7 +94,7 @@ jobs:
       # =========================
       # ARTIFACT
       # =========================
-      - name: Upload Windows Artifact
+      - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: Flash-Boot-Tool-win-${{ github.run_number }}
@@ -105,7 +102,7 @@ jobs:
           if-no-files-found: error
 
   # =========================
-  # MAC BUILD (CLEANED)
+  # MAC BUILD (SAFE)
   # =========================
   build-mac:
     runs-on: macos-latest
@@ -144,7 +141,7 @@ jobs:
             -hfs \
             -hfs-volume-name "FlashBoot"
 
-      - name: Upload Mac Artifact
+      - name: Upload Mac artifact
         uses: actions/upload-artifact@v4
         with:
           name: Flash-Boot-Tool-mac-${{ github.run_number }}
