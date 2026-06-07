@@ -2,7 +2,7 @@
 #include <fstream>
 
 void saveState(const FlashState& st) {
-    std::ofstream f("flash_state.bin", std::ios::binary);
+    std::ofstream f("flash_state.bin", std::ios::binary | std::ios::trunc);
     f.write((char*)&st, sizeof(st));
 }
 
