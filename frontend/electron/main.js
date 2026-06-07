@@ -2,37 +2,47 @@ const { app, BrowserWindow, ipcMain, dialog } = require("electron")
 const { spawn } = require("child_process")
 const path = require("path")
 const fs = require("fs")
+const { execSync } = require("child_process")
 
 let mainWindow = null
-let backendProc = null
 let flashProc = null
+
+// =========================
+// SAFE SEND (CRITICAL FIX)
+// =========================
+function safeSend(win, channel, data) {
+  try {
+    if (!win) return
+    if (win.isDestroyed()) return
+    if (win.webContents.isDestroyed()) return
+
+    win.webContents.send(channel, data)
+  } catch (e) {}
+}
 
 // =========================
 // BACKEND PATH
 // =========================
 function getBackendPath() {
-  let backendPath;
+  let backendPath
 
   if (app.isPackaged) {
     backendPath = path.join(
       process.resourcesPath,
       "backend",
       "backend.exe"
-    );
+    )
   } else {
     backendPath = path.resolve(
       __dirname,
       "../../backend/dist/backend.exe"
-    );
+    )
   }
 
-  console.log("BACKEND PATH =", backendPath);
-  console.log(
-    "BACKEND EXISTS =",
-    fs.existsSync(backendPath)
-  );
+  console.log("BACKEND PATH =", backendPath)
+  console.log("BACKEND EXISTS =", fs.existsSync(backendPath))
 
-  return backendPath;
+  return backendPath
 }
 
 // =========================
@@ -57,7 +67,16 @@ function createWindow() {
 }
 
 // =========================
-// USB CACHE (ลด lag)
+// USB EJECT (FIX)
+// =========================
+function ejectUSB(devicePath) {
+  try {
+    execSync(`mountvol ${devicePath}: /D`)
+  } catch {}
+}
+
+// =========================
+// USB CACHE
 // =========================
 let usbCache = []
 let lastUsbTime = 0
@@ -66,10 +85,11 @@ async function getUsbDevices() {
   const now = Date.now()
   if (now - lastUsbTime < 2000) return usbCache
 
-  const { execSync } = require("child_process")
-
   try {
-    const cmd = `powershell -NoProfile "Get-CimInstance Win32_DiskDrive | Where-Object {$_.InterfaceType -eq 'USB'} | Select DeviceID,Model,Size | ConvertTo-Json"`
+    const cmd =
+      `powershell -NoProfile "Get-CimInstance Win32_DiskDrive | ` +
+      `Where-Object {$_.InterfaceType -eq 'USB'} | ` +
+      `Select DeviceID,Model,Size | ConvertTo-Json"`
 
     const out = execSync(cmd).toString().trim()
     if (!out) return []
@@ -110,260 +130,144 @@ ipcMain.handle("select-iso", async () => {
 })
 
 // =========================
-// FLASH ENGINE (STREAM + EVENT BUS)
+// FLASH ENGINE (FIXED)
 // =========================
-ipcMain.handle(
-  "flash-iso",
-  async (event, mode, iso, device) => {
-    try {
-      const backend = getBackendPath();
+ipcMain.handle("flash-iso", async (event, mode, iso, device) => {
+  try {
+    const backend = getBackendPath()
 
-      if (!fs.existsSync(backend)) {
-        const msg =
-          "backend.exe not found:\n" +
-          backend;
+    if (!fs.existsSync(backend)) {
+      safeSend(mainWindow, "flash-event", {
+        type: "error",
+        msg: "backend.exe not found"
+      })
 
-        console.error(msg);
+      return { success: false }
+    }
 
-        event.sender.send(
-          "flash-event",
-          {
-            type: "error",
-            msg,
-          }
-        );
+    // 🔥 EJECT USB BEFORE FLASH (IMPORTANT FIX)
+    ejectUSB(device)
 
-        event.sender.send(
-          "flash-event",
-          {
-            type: "result",
-            success: false,
-          }
-        );
+    flashProc = spawn(
+      backend,
+      [mode, iso, device],
+      {
+        windowsHide: true,
+        shell: true
+      }
+    )
 
-        return {
-          success: false,
-          error: msg,
-        };
+    let buffer = ""
+    const MAX_BUFFER = 64 * 1024
+
+    flashProc.stdout.on("data", (data) => {
+      buffer += data.toString()
+
+      if (buffer.length > MAX_BUFFER) {
+        buffer = buffer.slice(-MAX_BUFFER)
       }
 
-      flashProc = spawn(
-        backend,
-        [
-          mode,
-          iso,
-          device,
-        ],
-        {
-          windowsHide: true,
+      const lines = buffer.split(/\r?\n/)
+      buffer = lines.pop() || ""
+
+      for (const line of lines) {
+        const msg = line.trim()
+
+        if (!mainWindow || mainWindow.isDestroyed()) return
+
+        console.log("[BACKEND]", msg)
+
+        if (msg.startsWith("PROGRESS:")) {
+          safeSend(mainWindow, "flash-event", {
+            type: "progress",
+            value: Number(msg.split(":")[1])
+          })
         }
-      );
 
-      let buffer = "";
-
-      flashProc.stdout.on(
-        "data",
-        (data) => {
-          buffer += data.toString();
-
-          const lines =
-            buffer.split(/\r?\n/);
-
-          buffer =
-            lines.pop() || "";
-
-          for (const line of lines) {
-            const msg =
-              line.trim();
-
-            console.log(
-              "[BACKEND]",
-              msg
-            );
-
-            if (
-              msg.startsWith(
-                "PROGRESS:"
-              )
-            ) {
-              event.sender.send(
-                "flash-event",
-                {
-                  type:
-                    "progress",
-                  value: Number(
-                    msg.split(
-                      ":"
-                    )[1]
-                  ),
-                }
-              );
-            } else if (
-              msg.startsWith(
-                "VERIFY:"
-              )
-            ) {
-              event.sender.send(
-                "flash-event",
-                {
-                  type:
-                    "verify",
-                  value: Number(
-                    msg.split(
-                      ":"
-                    )[1]
-                  ),
-                }
-              );
-            } else if (
-              msg.startsWith(
-                "SPEED:"
-              )
-            ) {
-              event.sender.send(
-                "flash-event",
-                {
-                  type:
-                    "speed",
-                  value: Number(
-                    msg.split(
-                      ":"
-                    )[1]
-                  ),
-                }
-              );
-            } else if (
-              msg.startsWith(
-                "LOG:"
-              )
-            ) {
-              event.sender.send(
-                "flash-event",
-                {
-                  type: "log",
-                  msg: msg
-                    .replace(
-                      "LOG:",
-                      ""
-                    )
-                    .trim(),
-                }
-              );
-            } else {
-              event.sender.send(
-                "flash-event",
-                {
-                  type: "log",
-                  msg,
-                }
-              );
-            }
-          }
+        else if (msg.startsWith("VERIFY:")) {
+          safeSend(mainWindow, "flash-event", {
+            type: "verify",
+            value: Number(msg.split(":")[1])
+          })
         }
-      );
 
-      flashProc.stderr.on(
-        "data",
-        (data) => {
-          const msg =
-            data.toString();
+        else if (msg.startsWith("LOG:")) {
+          safeSend(mainWindow, "flash-event", {
+            type: "log",
+            msg: msg.replace("LOG:", "").trim()
+          })
+        }
 
-          console.error(
-            "[BACKEND ERROR]",
+        else {
+          safeSend(mainWindow, "flash-event", {
+            type: "log",
             msg
-          );
-
-          event.sender.send(
-            "flash-event",
-            {
-              type: "error",
-              msg,
-            }
-          );
+          })
         }
-      );
+      }
+    })
 
-      flashProc.on(
-        "error",
-        (err) => {
-          console.error(
-            "SPAWN ERROR:",
-            err
-          );
+    flashProc.stderr.on("data", (data) => {
+      safeSend(mainWindow, "flash-event", {
+        type: "error",
+        msg: data.toString()
+      })
+    })
 
-          event.sender.send(
-            "flash-event",
-            {
-              type: "error",
-              msg:
-                err.message,
-            }
-          );
+    flashProc.on("close", (code) => {
+      safeSend(mainWindow, "flash-event", {
+        type: "result",
+        success: code === 0
+      })
 
-          event.sender.send(
-            "flash-event",
-            {
-              type: "result",
-              success: false,
-            }
-          );
-        }
-      );
+      flashProc = null
+    })
 
-      flashProc.on(
-        "close",
-        (code) => {
-          console.log(
-            "BACKEND EXIT:",
-            code
-          );
+    flashProc.on("error", (err) => {
+      safeSend(mainWindow, "flash-event", {
+        type: "error",
+        msg: err.message
+      })
 
-          event.sender.send(
-            "flash-event",
-            {
-              type: "result",
-              success:
-                code === 0,
-            }
-          );
+      flashProc = null
+    })
 
-          flashProc = null;
-        }
-      );
+    return { success: true }
+  } catch (err) {
+    safeSend(mainWindow, "flash-event", {
+      type: "error",
+      msg: err.message
+    })
 
-      return {
-        success: true,
-      };
-    } catch (err) {
-      console.error(err);
-
-      event.sender.send(
-        "flash-event",
-        {
-          type: "error",
-          msg:
-            err.message ||
-            String(err),
-        }
-      );
-
-      return {
-        success: false,
-      };
-    }
+    return { success: false }
   }
-);
+})
 
 // =========================
-// CANCEL SAFE
+// CANCEL FLASH (SAFE)
 // =========================
 ipcMain.on("cancel-flash", () => {
   if (flashProc) {
-    flashProc.kill()
+    try {
+      flashProc.kill("SIGTERM")
+    } catch {}
+
     flashProc = null
-    mainWindow.webContents.send("flash-event", {
+
+    safeSend(mainWindow, "flash-event", {
       type: "cancelled"
     })
+  }
+})
+
+// =========================
+// LIFECYCLE FIX
+// =========================
+app.on("before-quit", () => {
+  if (flashProc) {
+    try {
+      flashProc.kill()
+    } catch {}
   }
 })
 
