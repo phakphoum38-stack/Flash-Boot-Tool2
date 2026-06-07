@@ -1,7 +1,6 @@
 #include <windows.h>
 #include <iostream>
 #include <fstream>
-#include <queue>
 #include <vector>
 #include <thread>
 #include <mutex>
@@ -12,12 +11,16 @@
 #include "../engine/progress.cpp"
 #include "../engine/retry_engine.cpp"
 
-struct Chunk {
+#define SECTOR 4096
+
+struct SectorBlock {
     std::vector<char> data;
     size_t size;
+    size_t offset;
 };
 
-class FlashEngineV4 {
+class FlashEngineV5 {
+
 public:
 
     int start(const std::string& mode,
@@ -44,37 +47,43 @@ public:
         size_t totalSize = (size_t)file.tellg();
         file.seekg(0);
 
-        const size_t CHUNK_SIZE = 8 * 1024 * 1024;
+        const size_t CHUNK = 8 * 1024 * 1024;
 
-        std::queue<Chunk> queue;
+        std::vector<SectorBlock> queue;
         std::mutex mtx;
         std::condition_variable cv;
 
         bool readingDone = false;
-        bool writeError = false;
+        bool errorFlag = false;
 
         size_t written = 0;
 
         // =========================
-        // PRODUCER THREAD (READ ISO)
+        // READ THREAD (ISO → QUEUE)
         // =========================
         std::thread reader([&]() {
+
+            size_t offset = 0;
+
             while (file) {
 
-                Chunk c;
-                c.data.resize(CHUNK_SIZE);
+                SectorBlock block;
+                block.data.resize(CHUNK);
+                block.offset = offset;
 
-                file.read(c.data.data(), CHUNK_SIZE);
-                c.size = (size_t)file.gcount();
+                file.read(block.data.data(), CHUNK);
+                block.size = (size_t)file.gcount();
 
-                if (c.size == 0) break;
+                if (block.size == 0) break;
 
                 {
-                    std::unique_lock<std::mutex> lock(mtx);
-                    queue.push(std::move(c));
+                    std::lock_guard<std::mutex> lock(mtx);
+                    queue.push_back(std::move(block));
                 }
 
                 cv.notify_one();
+
+                offset += block.size;
             }
 
             readingDone = true;
@@ -82,13 +91,13 @@ public:
         });
 
         // =========================
-        // CONSUMER THREAD (WRITE USB)
+        // WRITE THREAD (ASYNC IO)
         // =========================
         std::thread writer([&]() {
 
             while (true) {
 
-                Chunk chunk;
+                SectorBlock block;
 
                 {
                     std::unique_lock<std::mutex> lock(mtx);
@@ -100,19 +109,17 @@ public:
                     if (queue.empty() && readingDone)
                         break;
 
-                    chunk = std::move(queue.front());
-                    queue.pop();
+                    block = std::move(queue.back());
+                    queue.pop_back();
                 }
 
-                if (!retryWrite(disk,
-                                (BYTE*)chunk.data.data(),
-                                (DWORD)chunk.size)) {
-                    writeError = true;
-                    std::cout << "ERROR: write chunk failed\n";
+                if (!asyncWrite(disk, block)) {
+                    std::cout << "ERROR: write failed\n";
+                    errorFlag = true;
                     break;
                 }
 
-                written += chunk.size;
+                written += block.size;
 
                 emitProgress((written * 100.0) / totalSize);
             }
@@ -121,8 +128,17 @@ public:
         reader.join();
         writer.join();
 
-        if (writeError) {
+        if (errorFlag) {
             std::cout << "FAILED\n";
+            return 1;
+        }
+
+        // =========================
+        // VERIFY PHASE
+        // =========================
+        std::cout << "VERIFY START\n";
+        if (!verifyDisk(disk, iso)) {
+            std::cout << "VERIFY FAILED\n";
             return 1;
         }
 
@@ -135,5 +151,83 @@ private:
     int extractIndex(const std::string& dev) {
         size_t pos = dev.find("PhysicalDrive");
         return std::stoi(dev.substr(pos + 13));
+    }
+
+    // =========================
+    // ASYNC WRITE (OVERLAPPED IO)
+    // =========================
+    bool asyncWrite(HANDLE disk, SectorBlock& block) {
+
+        OVERLAPPED ov = {0};
+        ov.Offset = (DWORD)(block.offset & 0xFFFFFFFF);
+        ov.OffsetHigh = (DWORD)(block.offset >> 32);
+
+        DWORD written = 0;
+
+        for (int i = 0; i < 3; i++) {
+
+            BOOL ok = WriteFile(
+                disk,
+                block.data.data(),
+                (DWORD)block.size,
+                &written,
+                &ov
+            );
+
+            if (ok || GetLastError() == ERROR_IO_PENDING) {
+                GetOverlappedResult(disk, &ov, &written, TRUE);
+                return true;
+            }
+
+            Sleep(30);
+        }
+
+        return false;
+    }
+
+    // =========================
+    // VERIFY PASS
+    // =========================
+    bool verifyDisk(HANDLE disk, const std::string& iso) {
+
+        std::ifstream file(iso, std::ios::binary);
+
+        const size_t CHUNK = 4 * 1024 * 1024;
+
+        char* buf1 = new char[CHUNK];
+        char* buf2 = new char[CHUNK];
+
+        size_t offset = 0;
+
+        while (file) {
+
+            file.read(buf1, CHUNK);
+            size_t size = file.gcount();
+            if (size == 0) break;
+
+            DWORD read = 0;
+
+            OVERLAPPED ov = {0};
+            ov.Offset = (DWORD)(offset & 0xFFFFFFFF);
+            ov.OffsetHigh = (DWORD)(offset >> 32);
+
+            if (!ReadFile(disk, buf2, (DWORD)size, &read, &ov)) {
+                delete[] buf1;
+                delete[] buf2;
+                return false;
+            }
+
+            if (memcmp(buf1, buf2, size) != 0) {
+                delete[] buf1;
+                delete[] buf2;
+                return false;
+            }
+
+            offset += size;
+        }
+
+        delete[] buf1;
+        delete[] buf2;
+        return true;
     }
 };
