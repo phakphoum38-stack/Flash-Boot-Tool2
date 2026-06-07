@@ -1,11 +1,9 @@
-#include <iostream>
 #include "engine/flash_engine_v4.cpp"
-#include "ipc/pipe_server.cpp"
 
 int main(int argc, char** argv) {
 
-    if (argc < 4) {
-        std::cout << "ERROR: usage <mode> <iso> <device>\n";
+    if (argc < 3) {
+        std::cout << "ERROR: args missing\n";
         return 1;
     }
 
@@ -13,8 +11,6 @@ int main(int argc, char** argv) {
     std::string iso = argv[2];
     std::string device = argv[3];
 
-    PipeServer::init(); // start IPC listener
-
     FlashEngineV4 engine;
-    return engine.start(mode, iso, device);
+    return engine.run(iso, device);
 }
