@@ -8,16 +8,15 @@ let mainWindow = null
 let flashProc = null
 
 // =========================
-// SAFE SEND (CRITICAL FIX)
+// SAFE SEND
 // =========================
 function safeSend(win, channel, data) {
   try {
     if (!win) return
     if (win.isDestroyed()) return
     if (win.webContents.isDestroyed()) return
-
     win.webContents.send(channel, data)
-  } catch (e) {}
+  } catch {}
 }
 
 // =========================
@@ -27,16 +26,9 @@ function getBackendPath() {
   let backendPath
 
   if (app.isPackaged) {
-    backendPath = path.join(
-      process.resourcesPath,
-      "backend",
-      "backend.exe"
-    )
+    backendPath = path.join(process.resourcesPath, "backend", "backend.exe")
   } else {
-    backendPath = path.resolve(
-      __dirname,
-      "../../backend/dist/backend.exe"
-    )
+    backendPath = path.resolve(__dirname, "../../backend/dist/backend.exe")
   }
 
   console.log("BACKEND PATH =", backendPath)
@@ -67,16 +59,51 @@ function createWindow() {
 }
 
 // =========================
-// USB EJECT (FIX)
+// DISK RESOLVER (RUFUS V2 CORE)
 // =========================
-function ejectUSB(devicePath) {
+function resolveDiskIndex(device) {
+  const match = device.match(/PhysicalDrive(\d+)/)
+  if (!match) throw new Error("Invalid device: must be PhysicalDriveX")
+  return Number(match[1])
+}
+
+// =========================
+// OFFLINE DISK (CRITICAL FIX)
+// =========================
+function offlineDisk(device) {
   try {
-    execSync(`mountvol ${devicePath}: /D`)
+    const index = resolveDiskIndex(device)
+
+    execSync(`
+      powershell -NoProfile -Command "
+      try {
+        Set-Disk -Number ${index} -IsOffline $true
+        Clear-Disk -Number ${index} -RemoveData -Confirm:$false
+      } catch {}
+    "`)
+  } catch (e) {
+    console.log("offlineDisk error:", e.message)
+  }
+}
+
+// =========================
+// ONLINE RESTORE
+// =========================
+function onlineDisk(device) {
+  try {
+    const index = resolveDiskIndex(device)
+
+    execSync(`
+      powershell -NoProfile -Command "
+      try {
+        Set-Disk -Number ${index} -IsOffline $false
+      } catch {}
+    "`)
   } catch {}
 }
 
 // =========================
-// USB CACHE
+// USB CACHE (FIXED MAPPING)
 // =========================
 let usbCache = []
 let lastUsbTime = 0
@@ -89,7 +116,7 @@ async function getUsbDevices() {
     const cmd =
       `powershell -NoProfile "Get-CimInstance Win32_DiskDrive | ` +
       `Where-Object {$_.InterfaceType -eq 'USB'} | ` +
-      `Select DeviceID,Model,Size | ConvertTo-Json"`
+      `Select Index,Model,Size | ConvertTo-Json"`
 
     const out = execSync(cmd).toString().trim()
     if (!out) return []
@@ -98,7 +125,7 @@ async function getUsbDevices() {
     const arr = Array.isArray(data) ? data : [data]
 
     usbCache = arr.map(d => ({
-      path: d.DeviceID,
+      path: `\\\\.\\PhysicalDrive${d.Index}`, // 🔥 FIXED (REAL RUFUS STYLE)
       name: d.Model || "USB",
       size: Number(d.Size || 0)
     }))
@@ -118,19 +145,7 @@ ipcMain.handle("get-usb-devices", async () => {
 })
 
 // =========================
-// IPC: ISO
-// =========================
-ipcMain.handle("select-iso", async () => {
-  const result = await dialog.showOpenDialog(mainWindow, {
-    properties: ["openFile"],
-    filters: [{ name: "ISO", extensions: ["iso", "img"] }]
-  })
-
-  return result.canceled ? null : result.filePaths[0]
-})
-
-// =========================
-// FLASH ENGINE (FIXED)
+// FLASH ENGINE (RUFUS V2 PIPELINE)
 // =========================
 ipcMain.handle("flash-iso", async (event, mode, iso, device) => {
   try {
@@ -141,31 +156,33 @@ ipcMain.handle("flash-iso", async (event, mode, iso, device) => {
         type: "error",
         msg: "backend.exe not found"
       })
-
       return { success: false }
     }
 
-    // 🔥 EJECT USB BEFORE FLASH (IMPORTANT FIX)
-    ejectUSB(device)
+    // 🔥 SAFETY CHECK
+    if (!device.includes("PhysicalDrive")) {
+      throw new Error("Invalid device format")
+    }
 
+    // 🔥 STEP 1: OFFLINE DISK
+    offlineDisk(device)
+
+    await new Promise(r => setTimeout(r, 800))
+
+    // 🔥 STEP 2: SPAWN BACKEND
     flashProc = spawn(
       backend,
       [mode, iso, device],
       {
         windowsHide: true,
-        shell: true
+        shell: false
       }
     )
 
     let buffer = ""
-    const MAX_BUFFER = 64 * 1024
 
     flashProc.stdout.on("data", (data) => {
       buffer += data.toString()
-
-      if (buffer.length > MAX_BUFFER) {
-        buffer = buffer.slice(-MAX_BUFFER)
-      }
 
       const lines = buffer.split(/\r?\n/)
       buffer = lines.pop() || ""
@@ -174,8 +191,6 @@ ipcMain.handle("flash-iso", async (event, mode, iso, device) => {
         const msg = line.trim()
 
         if (!mainWindow || mainWindow.isDestroyed()) return
-
-        console.log("[BACKEND]", msg)
 
         if (msg.startsWith("PROGRESS:")) {
           safeSend(mainWindow, "flash-event", {
@@ -215,6 +230,9 @@ ipcMain.handle("flash-iso", async (event, mode, iso, device) => {
     })
 
     flashProc.on("close", (code) => {
+      // 🔥 STEP 3: RESTORE DISK
+      onlineDisk(device)
+
       safeSend(mainWindow, "flash-event", {
         type: "result",
         success: code === 0
@@ -224,6 +242,8 @@ ipcMain.handle("flash-iso", async (event, mode, iso, device) => {
     })
 
     flashProc.on("error", (err) => {
+      onlineDisk(device)
+
       safeSend(mainWindow, "flash-event", {
         type: "error",
         msg: err.message
@@ -234,6 +254,8 @@ ipcMain.handle("flash-iso", async (event, mode, iso, device) => {
 
     return { success: true }
   } catch (err) {
+    onlineDisk(device)
+
     safeSend(mainWindow, "flash-event", {
       type: "error",
       msg: err.message
@@ -244,14 +266,11 @@ ipcMain.handle("flash-iso", async (event, mode, iso, device) => {
 })
 
 // =========================
-// CANCEL FLASH (SAFE)
+// CANCEL
 // =========================
 ipcMain.on("cancel-flash", () => {
   if (flashProc) {
-    try {
-      flashProc.kill("SIGTERM")
-    } catch {}
-
+    try { flashProc.kill("SIGTERM") } catch {}
     flashProc = null
 
     safeSend(mainWindow, "flash-event", {
@@ -261,13 +280,11 @@ ipcMain.on("cancel-flash", () => {
 })
 
 // =========================
-// LIFECYCLE FIX
+// CLEAN EXIT
 // =========================
 app.on("before-quit", () => {
   if (flashProc) {
-    try {
-      flashProc.kill()
-    } catch {}
+    try { flashProc.kill() } catch {}
   }
 })
 
