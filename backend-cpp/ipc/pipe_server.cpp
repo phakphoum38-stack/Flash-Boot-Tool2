@@ -1,26 +1,15 @@
 #include <windows.h>
-#include <string>
+#include <iostream>
 
-class PipeServer {
+void pipeServer() {
+    HANDLE pipe = CreateNamedPipeA(
+        "\\\\.\\pipe\\flash_pipe",
+        PIPE_ACCESS_OUTBOUND,
+        PIPE_TYPE_MESSAGE | PIPE_READMODE_MESSAGE | PIPE_WAIT,
+        1, 65536, 65536, 0, NULL
+    );
 
-public:
+    ConnectNamedPipe(pipe, NULL);
 
-    static void send(const std::string& msg) {
-
-        HANDLE pipe = CreateFileA(
-            R"(\\.\pipe\flash_tool)",
-            GENERIC_WRITE,
-            0, NULL,
-            OPEN_EXISTING,
-            0, NULL
-        );
-
-        if (pipe == INVALID_HANDLE_VALUE)
-            return;
-
-        DWORD written;
-        WriteFile(pipe, msg.c_str(), msg.size(), &written, NULL);
-
-        CloseHandle(pipe);
-    }
-};
+    std::cout << "PIPE READY\n";
+}
