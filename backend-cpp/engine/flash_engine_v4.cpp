@@ -9,9 +9,10 @@ int FlashEngineV4::run(
     std::string device
 )
 {
-    std::cout << "MODE   : " << mode << std::endl;
+    std::cout << "FlashEngineV4 started" << std::endl;
+    std::cout << "Mode   : " << mode << std::endl;
     std::cout << "ISO    : " << iso << std::endl;
-    std::cout << "DEVICE : " << device << std::endl;
+    std::cout << "Device : " << device << std::endl;
 
     return 0;
 }
