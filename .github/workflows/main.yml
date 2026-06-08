@@ -1,0 +1,71 @@
+name: Build Flash
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # =========================
+      # NODE (SAFE MODE)
+      # =========================
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      # =========================
+      # FRONTEND (VITE)
+      # =========================
+      - name: Build frontend
+        working-directory: frontend-c
+        run: |
+          npm install
+          npm run build
+
+      # =========================
+      # ELECTRON INSTALL
+      # =========================
+      - name: Install Electron deps
+        working-directory: electron
+        env:
+          ELECTRON_MIRROR: https://github.com/electron/electron/releases/download/
+          npm_config_registry: https://registry.npmjs.org/
+        run: |
+          npm config set fetch-retries 5
+          npm config set fetch-retry-mintimeout 20000
+          npm config set fetch-retry-maxtimeout 120000
+          npm install
+
+      # =========================
+      # MSVC
+      # =========================
+      - name: Setup MSVC
+        uses: ilammy/msvc-dev-cmd@v1
+
+      # =========================
+      # C++ BACKEND
+      # =========================
+      - name: Build C++ backend
+        working-directory: backend-cpp
+        run: |
+          mkdir build
+          cd build
+          cmake -G "Visual Studio 17 2022" ..
+          cmake --build . --config Release
+
+      # =========================
+      # ARTIFACT
+      # =========================
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: flash-tool
+          path: |
+            frontend-c/dist
+            backend-cpp/build/Release
+            electron

@@ -1,0 +1,63 @@
+{
+  "name": "flash-boot-ui",
+  "version": "1.0.0",
+  "description": "Flash Boot Tool UI",
+  "author": "phakphoum38-stack",
+  "main": "electron/main.js",
+  
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "start": "electron .",
+    "dist": "electron-builder --win --x64"
+  },
+
+  "dependencies": {
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0"
+  },
+
+  "devDependencies": {
+    "vite": "^5.0.0",
+    "@vitejs/plugin-react": "^4.2.1",
+    "electron": "^28.3.3",
+    "electron-builder": "^24.13.3"
+  },
+
+  "build": {
+    "appId": "com.flashboot.tool",
+    "productName": "Flash Boot Tool",
+
+    "directories": {
+      "output": "release"
+    },
+
+    "files": [
+      "dist/**/*",
+      "electron/**/*"
+    ],
+
+    "extraResources": [
+      {
+        "from": "../backend/dist/backend.exe",
+        "to": "backend/backend.exe"
+      },
+      {
+        "from": "../backend/flash_tool/resources",
+        "to": "backend/resources"
+      }
+    ],
+
+    "asarUnpack": [
+      "**/node_modules/drivelist/**/*"
+    ],
+
+    "npmRebuild": true,
+
+    "win": {
+      "target": "nsis",
+      "requestedExecutionLevel": "requireAdministrator",
+      "icon": "electron/icon.ico"
+    }
+  }
+}

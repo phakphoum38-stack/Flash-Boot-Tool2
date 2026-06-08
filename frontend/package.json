@@ -1,0 +1,65 @@
+{
+  "name": "flash-boot-tool",
+  "version": "1.0.0",
+  "description": "Flash Boot Tool",
+  "author": "Your Name",
+  "main": "electron/main.js",
+  "private": true,
+
+  "scripts": {
+    "dev": "vite",
+    "start": "electron .",
+    "build": "vite build",
+    "pack": "electron-builder --dir",
+    "dist": "vite build && electron-builder"
+  },
+
+  "build": {
+    "appId": "com.flashboot.tool",
+    "productName": "Flash Boot Tool",
+
+    "asar": true,
+
+    "directories": {
+      "output": "dist"
+    },
+
+    "files": [
+      "dist/**/*",
+      "electron/**/*",
+      "package.json"
+    ],
+
+    "extraResources": [
+      {
+        "from": "resources/backend",
+        "to": "backend"
+      },
+      {
+        "from": "resources/ventoy",
+        "to": "ventoy"
+      }
+    ],
+
+    "win": {
+      "target": "nsis"
+    },
+
+    "mac": {
+      "target": "dmg"
+    }
+  },
+
+  "dependencies": {
+    "is-admin": "^3.0.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+
+  "devDependencies": {
+    "electron": "^31.0.0",
+    "@vitejs/plugin-react": "^4.3.1",
+    "electron-builder": "^24.13.3",
+    "vite": "^5.4.0"
+  }
+}
