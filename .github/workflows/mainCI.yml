@@ -1,10 +1,8 @@
-ent” id=“58241”}
 name: Build Flash
-
 on:
-push:
-branches:
-- main
+ push:
+  branches:
+  - main
 
 jobs:
 build:
