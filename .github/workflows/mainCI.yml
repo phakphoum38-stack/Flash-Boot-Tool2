@@ -1,4 +1,5 @@
 name: Build Flash
+
 on:
  push:
   branches:
@@ -7,12 +8,13 @@ on:
 jobs:
  build:
   runs-on: windows-latest
-
   steps:
   - uses: actions/checkout@v4
+
   - uses: actions/setup-node@v4
     with:
       node-version: 20
+
   # =========================
   # FRONTEND
   # =========================
@@ -21,17 +23,20 @@ jobs:
     run: |
       npm install
       npm run build
+
   # =========================
   # ELECTRON
   # =========================
   - name: Install Electron deps
     working-directory: electron
     run: npm install
+
   # =========================
   # MSVC
   # =========================
   - name: Setup MSVC
     uses: ilammy/msvc-dev-cmd@v1
+
   # =========================
   # BUILD BACKEND
   # =========================
@@ -43,6 +48,7 @@ jobs:
       cd build
       cmake -G "Visual Studio 17 2022" ..
       cmake --build . --config Release
+
   # =========================
   # DEBUG BUILD OUTPUT
   # =========================
@@ -50,22 +56,20 @@ jobs:
     shell: powershell
     run: |
       Get-ChildItem backend-cpp/build -Recurse
+
   # =========================
   # COPY BACKEND EXE
   # =========================
-  - name: Copy backend.exe
+  - name: Copy FlashTool.exe
     shell: powershell
     run: |
-      $exe = Get-ChildItem backend-cpp/build -Recurse -Filter *.exe |
-             Where-Object { $_.Name -eq "backend.exe" } |
-             Select-Object -First 1
-      if (-not $exe) {
-        Write-Error "backend.exe not found"
-        exit 1
-      }
       New-Item -ItemType Directory -Force -Path "electron/resources/backend"
-      Copy-Item "backend-cpp/build/Release/FlashTool.exe" `
-                "electron/resources/backend/backend.exe"
+
+      Copy-Item `
+        "backend-cpp/build/Release/FlashTool.exe" `
+        "electron/resources/backend/FlashTool.exe" `
+        -Force
+
   # =========================
   # COPY FRONTEND DIST
   # =========================
@@ -73,15 +77,19 @@ jobs:
     shell: powershell
     run: |
       New-Item -ItemType Directory -Force -Path "electron/frontend"
-      Copy-Item "frontend-c/dist/*" `
-                "electron/frontend/" `
-                -Recurse -Force
+
+      Copy-Item `
+        "frontend-c/dist/*" `
+        "electron/frontend/" `
+        -Recurse -Force
+
   # =========================
   # BUILD ELECTRON
   # =========================
   - name: Build Electron
     working-directory: electron
     run: npm run dist
+
   # =========================
   # ARTIFACT
   # =========================
