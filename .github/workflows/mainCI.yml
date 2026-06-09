@@ -64,7 +64,7 @@ jobs:
         exit 1
       }
       New-Item -ItemType Directory -Force -Path "electron/resources/backend"
-      Copy-Item $exe.FullName `
+      Copy-Item "backend-cpp/build/Release/FlashTool.exe" `
                 "electron/resources/backend/backend.exe"
   # =========================
   # COPY FRONTEND DIST
