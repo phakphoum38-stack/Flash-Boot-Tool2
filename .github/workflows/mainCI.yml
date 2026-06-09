@@ -5,10 +5,10 @@ on:
   - main
 
 jobs:
-build:
-runs-on: windows-latest
+ build:
+  runs-on: windows-latest
 
-steps:
+  steps:
   - uses: actions/checkout@v4
   - uses: actions/setup-node@v4
     with:
