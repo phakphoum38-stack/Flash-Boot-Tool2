@@ -2,7 +2,8 @@ name: Build Flash
 
 on:
   push:
-    branches: [main]
+    branches:
+      - main
 
 jobs:
   build:
@@ -11,63 +12,49 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # =========================
-      # NODE SETUP + CACHE FIX
-      # =========================
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
           node-version: 20
 
-      # =========================
-      # FRONTEND BUILD (VITE)
-      # =========================
       - name: Build frontend
         working-directory: frontend-c
         run: |
           npm install
           npm run build
 
-      # =========================
-      # ELECTRON INSTALL (FIXED STABLE)
-      # =========================
       - name: Install Electron deps
         working-directory: electron
-        env:
-          ELECTRON_MIRROR: https://github.com/electron/electron/releases/download/
-          ELECTRON_SKIP_BINARY_DOWNLOAD: false
-          npm_config_registry: https://registry.npmjs.org/
         run: |
-          npm config set fetch-retries 5
-          npm config set fetch-retry-mintimeout 20000
-          npm config set fetch-retry-maxtimeout 120000
           npm install
 
-      # =========================
-      # MSVC FOR C++
-      # =========================
       - name: Setup MSVC
         uses: ilammy/msvc-dev-cmd@v1
 
-      # =========================
-      # BUILD C++ BACKEND
-      # =========================
       - name: Build C++ backend
         working-directory: backend-cpp
+        shell: cmd
         run: |
-          mkdir build
+          if not exist build mkdir build
           cd build
           cmake -G "Visual Studio 17 2022" ..
           cmake --build . --config Release
 
-      # =========================
-      # ARTIFACT OUTPUT
-      # =========================
+      - name: Copy backend.exe
+        shell: cmd
+        run: |
+          if not exist electron\resources\backend mkdir electron\resources\backend
+          copy backend-cpp\build\Release\backend.exe electron\resources\backend\backend.exe
+
+      - name: Build Electron
+        working-directory: electron
+        run: npm run dist
+
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
           name: flash-tool
           path: |
-            frontend-c/dist
-            backend-cpp/build/Release
-            electron
+            frontend-c/dist/**
+            backend-cpp/build/Release/**
+            electron/dist/**
