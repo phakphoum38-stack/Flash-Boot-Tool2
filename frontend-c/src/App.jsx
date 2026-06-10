@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import DevicePanel from "./components/DevicePanel";
 import FlashPanel from "./components/FlashPanel";
@@ -20,28 +20,74 @@ export default function App() {
   const [logs, setLogs] = useState([]);
   const [result, setResult] = useState(null);
 
+  useEffect(() => {
+
+    if (!window.electron) return;
+
+    const off =
+      window.electron.onFlashEvent(
+        (ev) => {
+
+          switch (ev.type) {
+
+            case "progress":
+              setProgress(ev.value || 0);
+              break;
+
+            case "speed":
+              setSpeed(ev.value || 0);
+              break;
+
+            case "log":
+              setLogs(prev => [
+                ...prev,
+                ev.msg
+              ]);
+              break;
+
+            case "result":
+              setResult(
+                ev.success
+              );
+              break;
+
+            default:
+              break;
+          }
+        }
+      );
+
+    return off;
+
+  }, []);
+
   const startFlash = async () => {
 
     try {
 
-      if (!window.electron) {
-        alert("Electron API not available");
+      if (!iso) {
+        alert("Select ISO first");
         return;
       }
+
+      if (!device) {
+        alert("Select USB first");
+        return;
+      }
+
+      setProgress(0);
+      setResult(null);
 
       setLogs(prev => [
         ...prev,
         "Starting flash..."
       ]);
 
-      const res =
-        await window.electron.flashIso(
-          mode,
-          iso,
-          device
-        );
-
-      setResult(res);
+      await window.electron.flashIso(
+        mode,
+        iso,
+        device
+      );
 
     } catch (err) {
 
