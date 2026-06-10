@@ -22,10 +22,25 @@ contextBridge.exposeInMainWorld("electron", {
       "get-usb-devices"
     ),
 
+  pauseFlash: () =>
+    ipcRenderer.invoke(
+      "pause-flash"
+    ),
+
+  resumeFlash: () =>
+    ipcRenderer.invoke(
+      "resume-flash"
+    ),
+
+  cancelFlash: () =>
+    ipcRenderer.invoke(
+      "cancel-flash"
+    ),
+
   onFlashEvent: (callback) => {
 
-    const handler = (_, event) =>
-      callback(event);
+    const handler = (_, data) =>
+      callback(data);
 
     ipcRenderer.on(
       "flash-event",
@@ -37,10 +52,6 @@ contextBridge.exposeInMainWorld("electron", {
         "flash-event",
         handler
       );
-  },
+  }
 
-  cancelFlash: () =>
-    ipcRenderer.send(
-      "cancel-flash"
-    )
 });
