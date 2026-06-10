@@ -1,19 +1,14 @@
 {
   "name": "flash-boot-tool",
+  "version": "1.0.0",
   "main": "main.js",
+
   "scripts": {
     "start": "electron .",
     "dist": "electron-builder --win portable"
   },
-  "devDependencies": {
-    "electron": "^30.0.0",
-    "electron-builder": "^24.13.3"
-  },
-
 
   "devDependencies": {
-    "vite": "^5.0.0",
-    "@vitejs/plugin-react": "^4.2.1",
     "electron": "^28.3.3",
     "electron-builder": "^24.13.3"
   },
@@ -27,31 +22,21 @@
     },
 
     "files": [
-      "dist/**/*",
-      "electron/**/*"
+      "main.js",
+      "preload.js"
     ],
 
     "extraResources": [
       {
-        "from": "../backend/dist/backend.exe",
-        "to": "backend/backend.exe"
-      },
-      {
-        "from": "../backend/flash_tool/resources",
-        "to": "backend/resources"
+        "from": "../backend-cpp/build/Release/FlashTool.exe",
+        "to": "backend/FlashTool.exe"
       }
     ],
 
-    "asarUnpack": [
-      "**/node_modules/drivelist/**/*"
-    ],
-
-    "npmRebuild": true,
-
     "win": {
-      "target": "nsis",
-      "requestedExecutionLevel": "requireAdministrator",
-      "icon": "electron/icon.ico"
+      "target": "portable",
+      "icon": "icon.ico",
+      "requestedExecutionLevel": "requireAdministrator"
     }
   }
 }
