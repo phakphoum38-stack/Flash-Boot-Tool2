@@ -17,6 +17,7 @@ console.log("ELECTRON MAIN LOADED");
 // WINDOW
 // =========================
 function createWindow() {
+
   mainWindow = new BrowserWindow({
     width: 1400,
     height: 900,
@@ -30,48 +31,49 @@ function createWindow() {
   const devUrl = process.env.VITE_DEV_SERVER_URL;
 
   if (devUrl) {
-    console.log("DEV MODE:", devUrl);
+
+    console.log("DEV MODE =", devUrl);
+
     mainWindow.loadURL(devUrl);
- 
-    else {
 
-      const indexFile = app.isPackaged
-       ? path.join(
-           process.resourcesPath,
-           "frontend",
-           "index.html"
-         )
-       : path.join(
-           __dirname,
-           "..",
-           "frontend-c",
-           "dist",
-           "index.html"
-         );
-
-       const backendExe = app.isPackaged
-         ? path.join(
-             process.resourcesPath,
-             "backend",
-             "FlashTool.exe"
-           )
-         : path.join(
-             __dirname,
-             "..",
-             "backend-cpp",
-             "build",
-             "Release",
-             "FlashTool.exe"
-           );
-
-      console.log("INDEX =", indexFile);
-      console.log("BACKEND =", backendExe);
-      mainWindow.loadFile(indexFile);
-   }
-
-  // เปิด DevTools เฉพาะตอนพัฒนา
-  if (devUrl) {
     mainWindow.webContents.openDevTools();
+
+  } else {
+
+    const indexFile = app.isPackaged
+      ? path.join(
+          process.resourcesPath,
+          "frontend",
+          "index.html"
+        )
+      : path.join(
+          __dirname,
+          "..",
+          "frontend-c",
+          "dist",
+          "index.html"
+        );
+
+    const backendExe = app.isPackaged
+      ? path.join(
+          process.resourcesPath,
+          "backend",
+          "FlashTool.exe"
+        )
+      : path.join(
+          __dirname,
+          "..",
+          "backend-cpp",
+          "build",
+          "Release",
+          "FlashTool.exe"
+        );
+
+    console.log("PRODUCTION MODE");
+    console.log("INDEX =", indexFile);
+    console.log("BACKEND =", backendExe);
+
+    mainWindow.loadFile(indexFile);
   }
 }
 
