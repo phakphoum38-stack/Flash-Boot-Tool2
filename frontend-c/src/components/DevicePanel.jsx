@@ -1,8 +1,6 @@
 import { useEffect, useState } from "react"
 
-const ipc = window.electron || {
-  invoke: async () => []
-}
+const electron = window.electron
 
 export default function DevicePanel({
   device,
@@ -15,21 +13,58 @@ export default function DevicePanel({
 
   const loadUSB = async () => {
     try {
-      const res = await ipc.invoke("get-usb-devices")
-      setUsbList(res || [])
-    } catch (e) {
-      console.log("USB load error:", e)
+
+      if (!electron?.getUsbDevices) {
+        console.log("getUsbDevices API missing")
+        setUsbList([])
+        return
+      }
+
+      const res = await electron.getUsbDevices()
+
+      setUsbList(
+        Array.isArray(res)
+          ? res
+          : []
+      )
+
+    } catch (err) {
+
+      console.error(
+        "USB load error:",
+        err
+      )
+
       setUsbList([])
     }
   }
 
   const selectISO = async () => {
     try {
-      const file = await ipc.invoke("select-iso")
-      console.log("ISO selected:", file)
-      if (file) setIso(file)
-    } catch (e) {
-      console.log("ISO error:", e)
+
+      if (!electron?.selectIso) {
+        console.log("selectIso API missing")
+        return
+      }
+
+      const file =
+        await electron.selectIso()
+
+      console.log(
+        "ISO selected:",
+        file
+      )
+
+      if (file) {
+        setIso(file)
+      }
+
+    } catch (err) {
+
+      console.error(
+        "ISO select error:",
+        err
+      )
     }
   }
 
@@ -48,7 +83,14 @@ export default function DevicePanel({
 
       <div style={{ marginTop: 10 }}>
         <b>ISO:</b>
-        <div style={{ fontSize: 12, opacity: 0.7 }}>
+
+        <div
+          style={{
+            fontSize: 12,
+            opacity: 0.7,
+            wordBreak: "break-all"
+          }}
+        >
           {iso || "Not selected"}
         </div>
       </div>
@@ -64,16 +106,27 @@ export default function DevicePanel({
       {usbList.map((d, i) => (
         <div
           key={i}
-          onClick={() => setDevice(d.path)}
+          onClick={() =>
+            setDevice(d.path)
+          }
           style={{
             padding: 8,
             margin: 5,
             cursor: "pointer",
-            background: device === d.path ? "#00c3ff" : "#222"
+            borderRadius: 6,
+            background:
+              device === d.path
+                ? "#00c3ff"
+                : "#222"
           }}
         >
-          <div>{d.name}</div>
-          <small>{d.path}</small>
+          <div>
+            {d.name || "Unknown Device"}
+          </div>
+
+          <small>
+            {d.path || ""}
+          </small>
         </div>
       ))}
 
@@ -81,7 +134,12 @@ export default function DevicePanel({
 
       <div>
         <b>Selected Device:</b>
-        <div style={{ fontSize: 12 }}>
+
+        <div
+          style={{
+            fontSize: 12
+          }}
+        >
           {device || "None"}
         </div>
       </div>
