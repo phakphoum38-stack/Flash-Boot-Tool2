@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "description": "Flash Boot Tool",
   "author": "phakphoum38-stack",
+  "type": "module",
 
   "main": "main.js",
 
@@ -32,9 +33,9 @@
 
     "extraResources": [
       {
-      "from": "resources/backend",
-      "to": "backend"
-      } 
+        "from": "resources/backend",
+        "to": "backend"
+      }
     ],
 
     "asarUnpack": [
