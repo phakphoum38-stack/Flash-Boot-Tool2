@@ -35,14 +35,37 @@ function createWindow() {
  
     else {
 
-      const indexFile = path.join(
-      __dirname,
-      "../frontend-c/dist/index.html"
-      );
+      const indexFile = app.isPackaged
+       ? path.join(
+           process.resourcesPath,
+           "frontend",
+           "index.html"
+         )
+       : path.join(
+           __dirname,
+           "..",
+           "frontend-c",
+           "dist",
+           "index.html"
+         );
 
-      console.log("PRODUCTION MODE");
-      console.log("INDEX FILE =", indexFile);
+       const backendExe = app.isPackaged
+         ? path.join(
+             process.resourcesPath,
+             "backend",
+             "FlashTool.exe"
+           )
+         : path.join(
+             __dirname,
+             "..",
+             "backend-cpp",
+             "build",
+             "Release",
+             "FlashTool.exe"
+           );
 
+      console.log("INDEX =", indexFile);
+      console.log("BACKEND =", backendExe);
       mainWindow.loadFile(indexFile);
    }
 
