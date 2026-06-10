@@ -1,5 +1,7 @@
+const { contextBridge, ipcRenderer } = require("electron");
+
 console.log("PRELOAD LOADED");
-const { app, BrowserWindow, ipcMain, dialog } = require("electron");
+
 contextBridge.exposeInMainWorld("electron", {
 
   flashIso: (mode, iso, device) =>
@@ -23,22 +25,22 @@ contextBridge.exposeInMainWorld("electron", {
   onFlashEvent: (callback) => {
 
     const handler = (_, event) =>
-      callback(event)
+      callback(event);
 
     ipcRenderer.on(
       "flash-event",
       handler
-    )
+    );
 
     return () =>
       ipcRenderer.removeListener(
         "flash-event",
         handler
-      )
+      );
   },
 
   cancelFlash: () =>
     ipcRenderer.send(
       "cancel-flash"
     )
-})
+});
