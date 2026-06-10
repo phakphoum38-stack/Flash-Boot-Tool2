@@ -32,9 +32,9 @@
 
     "extraResources": [
       {
-        "from": "resources/backend/FlashTool.exe",
-        "to": "backend/FlashTool.exe"
-      }
+      "from": "resources/backend",
+      "to": "backend"
+      } 
     ],
 
     "asarUnpack": [
