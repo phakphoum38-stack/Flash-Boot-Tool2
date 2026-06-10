@@ -30,14 +30,25 @@ function createWindow() {
   const devUrl = process.env.VITE_DEV_SERVER_URL;
 
   if (devUrl) {
+    console.log("DEV MODE:", devUrl);
     mainWindow.loadURL(devUrl);
   } else {
-    mainWindow.loadFile(
-      path.join(__dirname, "../dist/index.html")
+    const indexFile = path.join(
+      __dirname,
+      "frontend",
+      "index.html"
     );
+
+    console.log("PRODUCTION MODE");
+    console.log("INDEX FILE =", indexFile);
+
+    mainWindow.loadFile(indexFile);
   }
 
-  mainWindow.webContents.openDevTools();
+  // เปิด DevTools เฉพาะตอนพัฒนา
+  if (devUrl) {
+    mainWindow.webContents.openDevTools();
+  }
 }
 
 // =========================
