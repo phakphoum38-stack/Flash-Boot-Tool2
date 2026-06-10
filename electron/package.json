@@ -1,21 +1,15 @@
 {
-  "name": "flash-boot-ui",
-  "version": "1.0.0",
-  "description": "Flash Boot Tool UI",
-  "author": "phakphoum38-stack",
-  "main": "electron/main.js",
-  
+  "name": "flash-boot-tool",
+  "main": "main.js",
   "scripts": {
-    "dev": "vite",
-    "build": "vite build",
     "start": "electron .",
-    "dist": "electron-builder --win --x64"
+    "dist": "electron-builder --win portable"
+  },
+  "devDependencies": {
+    "electron": "^30.0.0",
+    "electron-builder": "^24.13.3"
   },
 
-  "dependencies": {
-    "react": "^18.2.0",
-    "react-dom": "^18.2.0"
-  },
 
   "devDependencies": {
     "vite": "^5.0.0",
