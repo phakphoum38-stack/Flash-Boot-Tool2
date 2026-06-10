@@ -32,18 +32,19 @@ function createWindow() {
   if (devUrl) {
     console.log("DEV MODE:", devUrl);
     mainWindow.loadURL(devUrl);
-  } else {
-    const indexFile = path.join(
+ 
+    else {
+
+      const indexFile = path.join(
       __dirname,
-      "frontend",
-      "index.html"
-    );
+      "../frontend-c/dist/index.html"
+      );
 
-    console.log("PRODUCTION MODE");
-    console.log("INDEX FILE =", indexFile);
+      console.log("PRODUCTION MODE");
+      console.log("INDEX FILE =", indexFile);
 
-    mainWindow.loadFile(indexFile);
-  }
+      mainWindow.loadFile(indexFile);
+   }
 
   // เปิด DevTools เฉพาะตอนพัฒนา
   if (devUrl) {
