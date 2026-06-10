@@ -1,7 +1,7 @@
 export default function FlashPanel({
   progress = 0,
   speed = 0,
-  result = null,
+  result,
   start
 }) {
 
@@ -13,11 +13,11 @@ export default function FlashPanel({
       </button>
 
       <div>
-        Progress: {Number(progress).toFixed(1)}%
+        Progress: {(progress || 0).toFixed(1)}%
       </div>
 
       <div>
-        Speed: {speed} MB/s
+        Speed: {(speed || 0).toFixed(1)} MB/s
       </div>
 
       {result !== null && (
