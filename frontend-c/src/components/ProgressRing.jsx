@@ -13,7 +13,7 @@ export default function ProgressRing({
           color: "#00ffcc"
         }}
       >
-        {Number(progress).toFixed(1)}%
+        {(progress || 0).toFixed(1)}%
       </div>
 
     </div>
