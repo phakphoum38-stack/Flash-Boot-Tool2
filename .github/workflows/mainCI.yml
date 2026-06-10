@@ -9,20 +9,30 @@ jobs:
  build:
   runs-on: windows-latest
   steps:
-  - uses: actions/checkout@v4
+  # =========================
+  # CHECKOUT
+  # =========================
+  - name: Checkout
+    uses: actions/checkout@v4
 
-  - uses: actions/setup-node@v4
+  # =========================
+  # NODE
+  # =========================
+  - name: Setup Node
+    uses: actions/setup-node@v4
     with:
       node-version: 20
 
   # =========================
-  # FRONTEND
+  # FRONTEND (VITE)
   # =========================
-  - name: Build frontend
+  - name: Install frontend deps
     working-directory: frontend-c
-    run: |
-      npm install
-      npm run build
+    run: npm install
+
+  - name: Build React
+    working-directory: frontend-c
+    run: npm run build
 
   # =========================
   # ELECTRON
@@ -38,7 +48,7 @@ jobs:
     uses: ilammy/msvc-dev-cmd@v1
 
   # =========================
-  # BUILD BACKEND
+  # BUILD C++ BACKEND
   # =========================
   - name: Build C++ backend
     working-directory: backend-cpp
@@ -50,7 +60,7 @@ jobs:
       cmake --build . --config Release
 
   # =========================
-  # DEBUG BUILD OUTPUT
+  # DEBUG BACKEND OUTPUT
   # =========================
   - name: Show backend files
     shell: powershell
@@ -60,7 +70,7 @@ jobs:
   # =========================
   # COPY BACKEND EXE
   # =========================
-  - name: Copy FlashTool.exe
+  - name: Copy backend exe
     shell: powershell
     run: |
       New-Item -ItemType Directory -Force -Path "electron/resources/backend"
@@ -71,7 +81,7 @@ jobs:
         -Force
 
   # =========================
-  # COPY FRONTEND DIST
+  # COPY REACT BUILD
   # =========================
   - name: Copy frontend build
     shell: powershell
@@ -84,17 +94,33 @@ jobs:
         -Recurse -Force
 
   # =========================
+  # SHOW FILES BEFORE PACKAGING
+  # =========================
+  - name: Show Electron Files
+    shell: powershell
+    run: |
+      Get-ChildItem electron -Recurse
+
+  # =========================
   # BUILD ELECTRON
   # =========================
-  - name: Build Electron
+  - name: Build Electron Windows
     working-directory: electron
     run: npm run dist
 
   # =========================
+  # SHOW RELEASE FILES
+  # =========================
+  - name: Show Release Files
+    shell: powershell
+    run: |
+      Get-ChildItem electron/release -Recurse
+
+  # =========================
   # ARTIFACT
   # =========================
-  - name: Upload Artifact
+  - name: Upload Windows Artifact
     uses: actions/upload-artifact@v4
     with:
-      name: flash-tool
-      path: electron/dist/**
+      name: Flash-Boot-Tool-Windows
+      path: electron/release/*.exe
