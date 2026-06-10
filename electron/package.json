@@ -26,14 +26,18 @@
     },
 
     "files": [
-       "**/*",
-       "!release/**/*",
-       "!node_modules/.cache/**/*"
+      "main.js",
+      "preload.js",
+      "package.json"
     ],
 
     "extraResources": [
       {
-        "from": "resources/backend",
+        "from": "../frontend-c/dist",
+        "to": "frontend"
+      },
+      {
+        "from": "../backend-cpp/build/Release",
         "to": "backend"
       }
     ],
