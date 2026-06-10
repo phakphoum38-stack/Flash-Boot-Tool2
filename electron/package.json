@@ -26,9 +26,9 @@
     },
 
     "files": [
-      "main.js",
-      "preload.js",
-      "frontend/**/*"
+       "**/*",
+       "!release/**/*",
+       "!node_modules/.cache/**/*"
     ],
 
     "extraResources": [
