@@ -152,42 +152,137 @@ ipcMain.handle("select-iso", async () => {
 });
 
 // =========================
-// FLASH ISO (MOCK - แก้ไขแล้ว)
+// FLASH ISO (REAL BACKEND)
 // =========================
+import { spawn } from "child_process";
+
 ipcMain.handle(
   "flash-iso",
   async (event, mode, iso, device) => {
-    console.log("FLASH START", { mode, iso, device });
 
-    let progress = 0;
-    let verify = 0;
+    console.log("FLASH START", {
+      mode,
+      iso,
+      device
+    });
 
-    // จำลองการเขียน
-    flashTimer = setInterval(() => {
-      progress += 10;
+    const backendExe = app.isPackaged
+      ? path.join(
+          process.resourcesPath,
+          "backend",
+          "FlashTool.exe"
+        )
+      : path.join(
+          __dirname,
+          "..",
+          "backend-cpp",
+          "build",
+          "Release",
+          "FlashTool.exe"
+        );
 
-      event.sender.send("flash-event", { type: "progress", value: progress });
-      event.sender.send("flash-event", { type: "log", msg: `Writing... ${progress}%` });
+    console.log("BACKEND =", backendExe);
 
-      if (progress >= 100) {
-        clearInterval(flashTimer);
+    const flashProcess = spawn(
+      backendExe,
+      [
+        mode,
+        iso,
+        device
+      ]
+    );
 
-        // จำลอง Verify
-        verifyTimer = setInterval(() => {
-          verify += 20;
-          event.sender.send("flash-event", { type: "verify", value: verify });
-          event.sender.send("flash-event", { type: "log", msg: `Verify... ${verify}%` });
+    flashProcess.stdout.on(
+      "data",
+      data => {
 
-          if (verify >= 100) {
-            clearInterval(verifyTimer);
-            event.sender.send("flash-event", { type: "log", msg: "✅ Flash Complete" });
-            event.sender.send("flash-event", { type: "result", success: true });
+        const msg =
+          data.toString().trim();
+
+        console.log(msg);
+
+        event.sender.send(
+          "flash-event",
+          {
+            type: "log",
+            msg
           }
-        }, 400);
-      }
-    }, 300);
+        );
 
-    return { success: true };
+        // Progress parser
+        const progressMatch =
+          msg.match(/Writing\.\.\.\s*(\d+)/i);
+
+        if (progressMatch) {
+          event.sender.send(
+            "flash-event",
+            {
+              type: "progress",
+              value: Number(
+                progressMatch[1]
+              )
+            }
+          );
+        }
+
+        const verifyMatch =
+          msg.match(/Verify\.\.\.\s*(\d+)/i);
+
+        if (verifyMatch) {
+          event.sender.send(
+            "flash-event",
+            {
+              type: "verify",
+              value: Number(
+                verifyMatch[1]
+              )
+            }
+          );
+        }
+      }
+    );
+
+    flashProcess.stderr.on(
+      "data",
+      data => {
+
+        const msg =
+          data.toString();
+
+        console.error(msg);
+
+        event.sender.send(
+          "flash-event",
+          {
+            type: "log",
+            msg
+          }
+        );
+      }
+    );
+
+    flashProcess.on(
+      "close",
+      code => {
+
+        console.log(
+          "BACKEND EXIT",
+          code
+        );
+
+        event.sender.send(
+          "flash-event",
+          {
+            type: "result",
+            success: code === 0
+          }
+        );
+      }
+    );
+
+    return {
+      success: true
+    };
   }
 );
 
