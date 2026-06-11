@@ -1,13 +1,12 @@
 #include "state_manager.h"
 
-static int g_state = 0;
+FlashState currentState =
+    IDLE;
 
-void setState(int state)
+void setState(
+    FlashState state
+)
 {
-    g_state = state;
-}
-
-int getState()
-{
-    return g_state;
+    currentState =
+        state;
 }
