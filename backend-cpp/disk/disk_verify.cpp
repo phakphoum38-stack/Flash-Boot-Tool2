@@ -3,10 +3,26 @@
 #include <windows.h>
 
 bool verifyChunk(
-    HANDLE,
-    BYTE*,
-    DWORD
+    HANDLE h,
+    BYTE* buf,
+    DWORD size
 )
 {
-    return true;
+    BYTE* verify =
+        new BYTE[size];
+
+    DWORD read = 0;
+
+    bool ok =
+        ReadFile(
+            h,
+            verify,
+            size,
+            &read,
+            NULL
+        );
+
+    delete[] verify;
+
+    return ok;
 }
