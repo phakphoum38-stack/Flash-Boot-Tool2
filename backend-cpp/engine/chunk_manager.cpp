@@ -1,4 +1,17 @@
-class ChunkManager {
-public:
-    static const int SIZE = 8 * 1024 * 1024;
-};
+#include "chunk_manager.h"
+
+bool readChunk(
+    HANDLE file,
+    BYTE* buffer,
+    DWORD size,
+    DWORD& bytesRead
+)
+{
+    return ReadFile(
+        file,
+        buffer,
+        size,
+        &bytesRead,
+        NULL
+    );
+}
