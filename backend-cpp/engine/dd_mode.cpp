@@ -95,6 +95,15 @@ int runDD(
 
         total += written;
 
+        double speed =
+            calculateSpeed(
+                total
+            );
+
+        emitSpeed(
+           speed
+        );
+
         emitProgress(percent);
             << total
             << std::endl;
