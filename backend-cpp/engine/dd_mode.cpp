@@ -101,13 +101,10 @@ int runDD(
                 total
             );
 
-        emitSpeed(
-           speed
+        emitProgress(
+            total /
+            (1024.0 * 1024.0)
         );
-
-        emitProgress(percent);
-            << total
-            << std::endl;
     }
 
     delete[] buffer;
