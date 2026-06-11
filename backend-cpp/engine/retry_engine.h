@@ -4,6 +4,7 @@
 
 bool retryWrite(
     HANDLE h,
-    BYTE* data,
-    DWORD size
+    BYTE* buf,
+    DWORD size,
+    int maxRetry = 3
 );
