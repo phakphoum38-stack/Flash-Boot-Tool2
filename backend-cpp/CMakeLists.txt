@@ -5,10 +5,10 @@ project(FlashTool)
 set(CMAKE_CXX_STANDARD 17)
 
 include_directories(
-    ${CMAKE_SOURCE_DIR}
-    ${CMAKE_SOURCE_DIR}/disk
-    ${CMAKE_SOURCE_DIR}/engine
-    ${CMAKE_SOURCE_DIR}/ipc
+    .
+    disk
+    engine
+    ipc
 )
 
 add_executable(
@@ -21,9 +21,10 @@ add_executable(
     disk/disk_write.cpp
     disk/disk_verify.cpp
 
+    engine/chunk_manager.cpp
     engine/flash_engine_v4.cpp
-    engine/retry_engine.cpp
     engine/progress.cpp
+    engine/retry_engine.cpp
     engine/state_manager.cpp
 
     ipc/pipe_server.cpp
