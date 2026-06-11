@@ -95,8 +95,7 @@ int runDD(
 
         total += written;
 
-        std::cout
-            << "PROGRESS:"
+        emitProgress(percent);
             << total
             << std::endl;
     }
