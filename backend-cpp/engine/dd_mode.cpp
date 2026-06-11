@@ -96,9 +96,13 @@ int runDD(
 
         total += written;
 
+        double percent =
+            (double)total *
+            100.0 /
+            (double)isoSize;
+
         emitProgress(
-            total /
-            (1024.0 * 1024.0)
+            percent
         );
     }
 
