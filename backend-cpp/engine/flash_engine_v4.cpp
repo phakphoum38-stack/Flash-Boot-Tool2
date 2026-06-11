@@ -1,7 +1,11 @@
 #include "flash_engine_v4.h"
 
+#include "dd_mode.h"
+#include "smart_mode.h"
+#include "etcher_mode.h"
+#include "ventoy_mode.h"
+
 #include <iostream>
-#include <string>
 
 int FlashEngineV4::run(
     std::string mode,
@@ -9,10 +13,38 @@ int FlashEngineV4::run(
     std::string device
 )
 {
-    std::cout << "FlashEngineV4 started" << std::endl;
-    std::cout << "Mode   : " << mode << std::endl;
-    std::cout << "ISO    : " << iso << std::endl;
-    std::cout << "Device : " << device << std::endl;
+    std::cout
+        << "FlashEngineV4 started"
+        << std::endl;
 
-    return 0;
+    std::cout
+        << "Mode : "
+        << mode
+        << std::endl;
+
+    if (mode == "dd")
+        return runDD(
+            iso,
+            device
+        );
+
+    if (mode == "smart")
+        return runSmart(
+            iso,
+            device
+        );
+
+    if (mode == "etcher")
+        return runEtcher(
+            iso,
+            device
+        );
+
+    if (mode == "ventoy")
+        return runVentoy(
+            iso,
+            device
+        );
+
+    return 1;
 }
