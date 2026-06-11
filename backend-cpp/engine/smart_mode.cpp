@@ -1,5 +1,4 @@
 #include "smart_mode.h"
-
 #include "dd_mode.h"
 
 #include <iostream>
@@ -20,7 +19,13 @@ int runSmart(
         );
 
     if (result != 0)
+    {
+        std::cout
+            << "LOG:SMART_FAILED"
+            << std::endl;
+
         return result;
+    }
 
     std::cout
         << "LOG:VERIFY_OK"
