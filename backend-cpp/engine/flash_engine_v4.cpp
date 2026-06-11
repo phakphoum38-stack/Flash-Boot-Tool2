@@ -1,11 +1,7 @@
 #include "flash_engine_v4.h"
+#include "progress.h"
 
-#include "dd_mode.h"
-#include "smart_mode.h"
-#include "etcher_mode.h"
-#include "ventoy_mode.h"
-
-#include <iostream>
+#include <windows.h>
 
 int FlashEngineV4::run(
     std::string mode,
@@ -13,38 +9,38 @@ int FlashEngineV4::run(
     std::string device
 )
 {
-    std::cout
-        << "FlashEngineV4 started"
-        << std::endl;
+    emitLog(
+        "FlashEngineV4 started"
+    );
 
-    std::cout
-        << "Mode : "
-        << mode
-        << std::endl;
+    for (
+        int i = 0;
+        i <= 100;
+        i += 5
+    )
+    {
+        emitProgress(i);
 
-    if (mode == "dd")
-        return runDD(
-            iso,
-            device
+        emitSpeed(
+            20.0 +
+            (i * 0.8)
         );
 
-    if (mode == "smart")
-        return runSmart(
-            iso,
-            device
-        );
+        Sleep(200);
+    }
 
-    if (mode == "etcher")
-        return runEtcher(
-            iso,
-            device
-        );
+    for (
+        int i = 0;
+        i <= 100;
+        i += 10
+    )
+    {
+        emitVerify(i);
 
-    if (mode == "ventoy")
-        return runVentoy(
-            iso,
-            device
-        );
+        Sleep(150);
+    }
 
-    return 1;
+    emitDone();
+
+    return 0;
 }
