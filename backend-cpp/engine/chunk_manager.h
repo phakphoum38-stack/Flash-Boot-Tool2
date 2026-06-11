@@ -1,10 +1,11 @@
 #pragma once
 
+#include <fstream>
 #include <windows.h>
 
 bool readChunk(
-    HANDLE file,
+    std::ifstream& file,
     BYTE* buffer,
-    DWORD size,
+    DWORD chunkSize,
     DWORD& bytesRead
 );
