@@ -10,12 +10,17 @@
 
 int runDD(
     const std::string& iso,
-    const std::string& device
+    const std::string& device,
+    uint64_t isoSize
 )
 {
-    std::cout
-        << "LOG:DD_START"
-        << std::endl;
+    std::cout << "LOG:DD_START" << std::endl;
+
+    if (isoSize == 0)
+    {
+        std::cout << "LOG:INVALID_ISO_SIZE" << std::endl;
+        return 1;
+    }
 
     std::ifstream file(
         iso,
@@ -24,53 +29,39 @@ int runDD(
 
     if (!file)
     {
-        std::cout
-            << "LOG:ISO_OPEN_FAIL"
-            << std::endl;
-
+        std::cout << "LOG:ISO_OPEN_FAIL" << std::endl;
         return 1;
     }
 
-    HANDLE disk =
-        CreateFileA(
-            device.c_str(),
-            GENERIC_WRITE,
-            FILE_SHARE_READ |
-            FILE_SHARE_WRITE,
-            NULL,
-            OPEN_EXISTING,
-            0,
-            NULL
-        );
+    HANDLE disk = CreateFileA(
+        device.c_str(),
+        GENERIC_WRITE,
+        FILE_SHARE_READ | FILE_SHARE_WRITE,
+        NULL,
+        OPEN_EXISTING,
+        0,
+        NULL
+    );
 
     if (disk == INVALID_HANDLE_VALUE)
     {
-        std::cout
-            << "LOG:DISK_OPEN_FAIL"
-            << std::endl;
-
+        std::cout << "LOG:DISK_OPEN_FAIL" << std::endl;
         return 1;
     }
 
-    const DWORD CHUNK =
-        4 * 1024 * 1024;
+    const DWORD CHUNK = 4 * 1024 * 1024;
 
-    BYTE* buffer =
-        new BYTE[CHUNK];
+    BYTE* buffer = new BYTE[CHUNK];
 
     unsigned long long total = 0;
 
-    while (file)
+    while (true)
     {
-        file.read(
-            (char*)buffer,
-            CHUNK
-        );
+        file.read(reinterpret_cast<char*>(buffer), CHUNK);
 
-        DWORD bytes =
-            (DWORD)file.gcount();
+        std::streamsize bytesRead = file.gcount();
 
-        if (bytes == 0)
+        if (bytesRead <= 0)
             break;
 
         DWORD written = 0;
@@ -78,43 +69,33 @@ int runDD(
         if (!WriteFile(
             disk,
             buffer,
-            bytes,
+            static_cast<DWORD>(bytesRead),
             &written,
             NULL
         ))
         {
             delete[] buffer;
-
             CloseHandle(disk);
 
-            std::cout
-                << "LOG:WRITE_FAIL"
-                << std::endl;
-
+            std::cout << "LOG:WRITE_FAIL" << std::endl;
             return 1;
         }
 
         total += written;
 
         double percent =
-            (double)total *
-            100.0 /
-            (double)isoSize;
+            (static_cast<double>(total) * 100.0) /
+            static_cast<double>(isoSize);
 
-        emitProgress(
-            percent
-        );
+        emitProgress(percent);
     }
 
     delete[] buffer;
 
     FlushFileBuffers(disk);
-
     CloseHandle(disk);
 
-    std::cout
-        << "LOG:DD_DONE"
-        << std::endl;
+    std::cout << "LOG:DD_DONE" << std::endl;
 
     return 0;
 }
