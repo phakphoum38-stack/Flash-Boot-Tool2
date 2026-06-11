@@ -29,5 +29,10 @@ bool writeChunk(
 
     total += size;
 
+    emitProgress(
+        total /
+        (1024.0 * 1024.0)
+    );
+
     return true;
 }
