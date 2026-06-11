@@ -2,11 +2,12 @@
 
 #include <iostream>
 
-void sendPipeMessage(
+void sendIPC(
     const char* msg
 )
 {
     std::cout
+        << "IPC:"
         << msg
         << std::endl;
 }
