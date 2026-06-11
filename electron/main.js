@@ -1,15 +1,28 @@
 console.log("ROOT MAIN LOADED");
-import { app, BrowserWindow, ipcMain, dialog } from "electron";
-import { execSync } from "child_process";
+
+import {
+  app,
+  BrowserWindow,
+  ipcMain,
+  dialog
+} from "electron";
+
+import {
+  execSync,
+  spawn
+} from "child_process";
+
 import path from "path";
 import { fileURLToPath } from "url";
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+const __filename =
+  fileURLToPath(import.meta.url);
+
+const __dirname =
+  path.dirname(__filename);
 
 let mainWindow = null;
-let flashTimer = null;
-let verifyTimer = null;
+let flashProcess = null;
 
 console.log("ELECTRON MAIN LOADED");
 
@@ -22,17 +35,24 @@ function createWindow() {
     width: 1400,
     height: 900,
     webPreferences: {
-      preload: path.join(__dirname, "preload.js"),
+      preload: path.join(
+        __dirname,
+        "preload.js"
+      ),
       contextIsolation: true,
-      nodeIntegration: false,
-    },
+      nodeIntegration: false
+    }
   });
 
-  const devUrl = process.env.VITE_DEV_SERVER_URL;
+  const devUrl =
+    process.env.VITE_DEV_SERVER_URL;
 
   if (devUrl) {
 
-    console.log("DEV MODE =", devUrl);
+    console.log(
+      "DEV MODE =",
+      devUrl
+    );
 
     mainWindow.loadURL(devUrl);
 
@@ -40,40 +60,33 @@ function createWindow() {
 
   } else {
 
-    const indexFile = app.isPackaged
-      ? path.join(
-          process.resourcesPath,
-          "frontend",
-          "index.html"
-        )
-      : path.join(
-          __dirname,
-          "..",
-          "frontend-c",
-          "dist",
-          "index.html"
-        );
+    const indexFile =
+      app.isPackaged
+        ? path.join(
+            process.resourcesPath,
+            "frontend",
+            "index.html"
+          )
+        : path.join(
+            __dirname,
+            "..",
+            "frontend-c",
+            "dist",
+            "index.html"
+          );
 
-    const backendExe = app.isPackaged
-      ? path.join(
-          process.resourcesPath,
-          "backend",
-          "FlashTool.exe"
-        )
-      : path.join(
-          __dirname,
-          "..",
-          "backend-cpp",
-          "build",
-          "Release",
-          "FlashTool.exe"
-        );
+    console.log(
+      "PRODUCTION MODE"
+    );
 
-    console.log("PRODUCTION MODE");
-    console.log("INDEX =", indexFile);
-    console.log("BACKEND =", backendExe);
+    console.log(
+      "INDEX =",
+      indexFile
+    );
 
-    mainWindow.loadFile(indexFile);
+    mainWindow.loadFile(
+      indexFile
+    );
   }
 }
 
@@ -84,40 +97,60 @@ let usbCache = [];
 let lastUsbTime = 0;
 
 async function getUsbDevices() {
+
   const now = Date.now();
 
-  if (now - lastUsbTime < 2000) {
+  if (
+    now - lastUsbTime < 2000
+  ) {
     return usbCache;
   }
 
   try {
+
     const cmd =
       `powershell -NoProfile "Get-CimInstance Win32_DiskDrive | Where-Object {$_.InterfaceType -eq 'USB'} | Select DeviceID,Model,Size | ConvertTo-Json"`;
 
-    const output = execSync(cmd)
-      .toString()
-      .trim();
+    const output =
+      execSync(cmd)
+        .toString()
+        .trim();
 
     if (!output) {
       return [];
     }
 
-    const parsed = JSON.parse(output);
-    const arr = Array.isArray(parsed)
-      ? parsed
-      : [parsed];
+    const parsed =
+      JSON.parse(output);
 
-    usbCache = arr.map((d) => ({
-      path: d.DeviceID,
-      name: d.Model || "USB Device",
-      size: Number(d.Size || 0),
-    }));
+    const arr =
+      Array.isArray(parsed)
+        ? parsed
+        : [parsed];
+
+    usbCache = arr.map(
+      d => ({
+        path: d.DeviceID,
+        name:
+          d.Model ||
+          "USB Device",
+        size: Number(
+          d.Size || 0
+        )
+      })
+    );
 
     lastUsbTime = now;
 
     return usbCache;
+
   } catch (err) {
-    console.error("USB SCAN ERROR:", err);
+
+    console.error(
+      "USB SCAN ERROR:",
+      err
+    );
+
     return [];
   }
 }
@@ -125,79 +158,104 @@ async function getUsbDevices() {
 // =========================
 // IPC USB
 // =========================
-ipcMain.handle("get-usb-devices", async () => {
-  return await getUsbDevices();
-});
+ipcMain.handle(
+  "get-usb-devices",
+  async () => {
+    return await getUsbDevices();
+  }
+);
 
 // =========================
 // IPC ISO
 // =========================
-ipcMain.handle("select-iso", async () => {
-  const result = await dialog.showOpenDialog(
-    mainWindow,
-    {
-      properties: ["openFile"],
-      filters: [
+ipcMain.handle(
+  "select-iso",
+  async () => {
+
+    const result =
+      await dialog.showOpenDialog(
+        mainWindow,
         {
-          name: "ISO Files",
-          extensions: ["iso", "img"],
-        },
-      ],
-    }
-  );
+          properties: [
+            "openFile"
+          ],
+          filters: [
+            {
+              name:
+                "ISO Files",
+              extensions: [
+                "iso",
+                "img"
+              ]
+            }
+          ]
+        }
+      );
 
-  return result.canceled
-    ? null
-    : result.filePaths[0];
-});
+    return result.canceled
+      ? null
+      : result.filePaths[0];
+  }
+);
 
 // =========================
-// FLASH ISO (REAL BACKEND)
+// FLASH ISO
 // =========================
-import { spawn } from "child_process";
-
 ipcMain.handle(
   "flash-iso",
-  async (event, mode, iso, device) => {
+  async (
+    event,
+    mode,
+    iso,
+    device
+  ) => {
 
-    console.log("FLASH START", {
-      mode,
-      iso,
-      device
-    });
-
-    const backendExe = app.isPackaged
-      ? path.join(
-          process.resourcesPath,
-          "backend",
-          "FlashTool.exe"
-        )
-      : path.join(
-          __dirname,
-          "..",
-          "backend-cpp",
-          "build",
-          "Release",
-          "FlashTool.exe"
-        );
-
-    console.log("BACKEND =", backendExe);
-
-    const flashProcess = spawn(
-      backendExe,
-      [
+    console.log(
+      "FLASH START",
+      {
         mode,
         iso,
         device
-      ]
+      }
     );
+
+    const backendExe =
+      app.isPackaged
+        ? path.join(
+            process.resourcesPath,
+            "backend",
+            "FlashTool.exe"
+          )
+        : path.join(
+            __dirname,
+            "..",
+            "backend-cpp",
+            "build",
+            "Release",
+            "FlashTool.exe"
+          );
+
+    console.log(
+      "BACKEND =",
+      backendExe
+    );
+
+    flashProcess =
+      spawn(
+        backendExe,
+        [
+          mode,
+          iso,
+          device
+        ]
+      );
 
     flashProcess.stdout.on(
       "data",
       data => {
 
         const msg =
-          data.toString().trim();
+          data.toString();
 
         console.log(msg);
 
@@ -209,15 +267,20 @@ ipcMain.handle(
           }
         );
 
-        // Progress parser
         const progressMatch =
-          msg.match(/Writing\.\.\.\s*(\d+)/i);
+          msg.match(
+            /Writing\.\.\.\s*(\d+)/i
+          );
 
-        if (progressMatch) {
+        if (
+          progressMatch
+        ) {
+
           event.sender.send(
             "flash-event",
             {
-              type: "progress",
+              type:
+                "progress",
               value: Number(
                 progressMatch[1]
               )
@@ -226,13 +289,19 @@ ipcMain.handle(
         }
 
         const verifyMatch =
-          msg.match(/Verify\.\.\.\s*(\d+)/i);
+          msg.match(
+            /Verify\.\.\.\s*(\d+)/i
+          );
 
-        if (verifyMatch) {
+        if (
+          verifyMatch
+        ) {
+
           event.sender.send(
             "flash-event",
             {
-              type: "verify",
+              type:
+                "verify",
               value: Number(
                 verifyMatch[1]
               )
@@ -273,10 +342,15 @@ ipcMain.handle(
         event.sender.send(
           "flash-event",
           {
-            type: "result",
-            success: code === 0
+            type:
+              "result",
+            success:
+              code === 0
           }
         );
+
+        flashProcess =
+          null;
       }
     );
 
@@ -292,44 +366,28 @@ ipcMain.handle(
 ipcMain.handle(
   "cancel-flash",
   async () => {
-    if (flashTimer) {
-      clearInterval(flashTimer);
-      flashTimer = null;
-    }
 
-    if (verifyTimer) {
-      clearInterval(verifyTimer);
-      verifyTimer = null;
+    if (
+      flashProcess
+    ) {
+
+      flashProcess.kill();
+
+      flashProcess =
+        null;
     }
 
     mainWindow?.webContents.send(
       "flash-event",
       {
-        type: "cancelled",
+        type:
+          "cancelled"
       }
     );
 
     return true;
   }
 );
-
-// =========================
-// PAUSE & RESUME
-// =========================
-ipcMain.handle("pause-flash", async () => {
-  if (flashTimer) {
-    clearInterval(flashTimer);
-    flashTimer = null;
-  }
-  mainWindow?.webContents.send("flash-event", { type: "paused" });
-  return true;
-});
-
-ipcMain.handle("resume-flash", async () => {
-  // ยังเป็น mock อยู่ ต่อยอดได้ภายหลัง
-  mainWindow?.webContents.send("flash-event", { type: "resumed" });
-  return true;
-});
 
 // =========================
 // APP
@@ -341,10 +399,12 @@ app.whenReady().then(
 app.on(
   "window-all-closed",
   () => {
+
     if (
       process.platform !==
       "darwin"
     ) {
+
       app.quit();
     }
   }
