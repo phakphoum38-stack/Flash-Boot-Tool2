@@ -4,6 +4,6 @@
 
 bool verifyChunk(
     HANDLE h,
-    BYTE* buf,
+    BYTE* expected,
     DWORD size
 );
