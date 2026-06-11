@@ -1,5 +1,12 @@
+#include "disk_verify.h"
+
 #include <windows.h>
 
-bool verifyDisk(HANDLE disk) {
+bool verifyChunk(
+    HANDLE,
+    BYTE*,
+    DWORD
+)
+{
     return true;
 }
