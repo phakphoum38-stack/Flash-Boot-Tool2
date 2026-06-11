@@ -96,11 +96,6 @@ int runDD(
 
         total += written;
 
-        double speed =
-            calculateSpeed(
-                total
-            );
-
         emitProgress(
             total /
             (1024.0 * 1024.0)
