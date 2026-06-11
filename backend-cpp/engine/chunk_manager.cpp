@@ -1,19 +1,19 @@
-#include "chunk_manager.h"
+#include <fstream>
 
 bool readChunk(
-    std::ifstream& file,
-    BYTE* buffer,
-    DWORD chunkSize,
-    DWORD& bytesRead
+    std::ifstream& iso,
+    char* buffer,
+    size_t size,
+    size_t& readSize
 )
 {
-    file.read(
-        (char*)buffer,
-        chunkSize
+    iso.read(
+        buffer,
+        size
     );
 
-    bytesRead =
-        (DWORD)file.gcount();
+    readSize =
+        (size_t)iso.gcount();
 
-    return bytesRead > 0;
+    return readSize > 0;
 }
