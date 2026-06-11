@@ -6,6 +6,7 @@
 #include "ventoy_mode.h"
 
 #include <iostream>
+#include <filesystem>
 
 int FlashEngineV4::run(
     std::string mode,
@@ -13,15 +14,16 @@ int FlashEngineV4::run(
     std::string device
 )
 {
-    std::cout
-        << "LOG:ENGINE_START"
-        << std::endl;
+    std::cout << "LOG:ENGINE_START" << std::endl;
 
     if (mode == "dd")
     {
+        uint64_t isoSize = std::filesystem::file_size(iso);
+
         return runDD(
             iso,
-            device
+            device,
+            isoSize
         );
     }
 
@@ -49,9 +51,7 @@ int FlashEngineV4::run(
         );
     }
 
-    std::cout
-        << "LOG:UNKNOWN_MODE"
-        << std::endl;
+    std::cout << "LOG:UNKNOWN_MODE" << std::endl;
 
     return 1;
 }
