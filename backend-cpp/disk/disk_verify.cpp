@@ -1,14 +1,15 @@
 #include "disk_verify.h"
 
 #include <windows.h>
+#include <cstring>
 
 bool verifyChunk(
     HANDLE h,
-    BYTE* buf,
+    BYTE* expected,
     DWORD size
 )
 {
-    BYTE* verifyBuf =
+    BYTE* actual =
         new BYTE[size];
 
     DWORD readBytes = 0;
@@ -16,16 +17,22 @@ bool verifyChunk(
     BOOL ok =
         ReadFile(
             h,
-            verifyBuf,
+            actual,
             size,
             &readBytes,
             NULL
         );
 
-    delete[] verifyBuf;
-
-    return (
+    bool result =
         ok &&
-        readBytes == size
-    );
+        readBytes == size &&
+        memcmp(
+            expected,
+            actual,
+            size
+        ) == 0;
+
+    delete[] actual;
+
+    return result;
 }
