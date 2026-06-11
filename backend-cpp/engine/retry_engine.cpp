@@ -5,30 +5,25 @@
 bool retryWrite(
     HANDLE h,
     BYTE* buf,
-    DWORD size,
-    int maxRetry
+    DWORD size
 )
 {
+    DWORD written = 0;
+
     for (
-        int i = 0;
-        i < maxRetry;
-        i++
+        int retry = 0;
+        retry < 3;
+        retry++
     )
     {
-        DWORD written = 0;
-
-        BOOL ok =
+        if (
             WriteFile(
                 h,
                 buf,
                 size,
                 &written,
                 NULL
-            );
-
-        if (
-            ok &&
-            written == size
+            )
         )
         {
             return true;
