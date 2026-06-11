@@ -1,3 +1,13 @@
 #pragma once
 
-void emitProgress(double value);
+void emitProgress(
+    double percent
+);
+
+void emitSpeed(
+    double mbps
+);
+
+void emitLog(
+    const char* msg
+);
