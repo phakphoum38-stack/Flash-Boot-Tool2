@@ -1,8 +1,9 @@
-#include <windows.h>
-#include <iostream>
+#include "disk_write.h"
 
-#include "retry_engine.h"
-#include "progress.h"
+#include "../engine/retry_engine.h"
+#include "../engine/progress.h"
+
+#include <iostream>
 
 bool writeChunk(
     HANDLE h,
@@ -11,20 +12,22 @@ bool writeChunk(
     unsigned long long& total
 )
 {
-    if (!retryWrite(h, buf, size)) {
-
-        std::cout
-            << "LOG:WRITE_FAIL"
-            << std::endl;
+    if (
+        !retryWrite(
+            h,
+            buf,
+            size
+        )
+    )
+    {
+        emitLog(
+            "WRITE_FAIL"
+        );
 
         return false;
     }
 
     total += size;
-
-    emitProgress(
-        total / (1024.0 * 1024.0)
-    );
 
     return true;
 }
