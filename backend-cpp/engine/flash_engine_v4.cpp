@@ -5,12 +5,18 @@
 #include "etcher_mode.h"
 #include "ventoy_mode.h"
 
+#include <iostream>
+
 int FlashEngineV4::run(
     std::string mode,
     std::string iso,
     std::string device
 )
 {
+    std::cout
+        << "LOG:ENGINE_START"
+        << std::endl;
+
     if (mode == "dd")
     {
         return runDD(
@@ -42,6 +48,10 @@ int FlashEngineV4::run(
             device
         );
     }
+
+    std::cout
+        << "LOG:UNKNOWN_MODE"
+        << std::endl;
 
     return 1;
 }
