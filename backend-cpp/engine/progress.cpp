@@ -1,33 +1,23 @@
-#include "progress.h"
+#include <chrono>
 
-#include <iostream>
-
-void emitProgress(
-    double percent
+static auto startTime =
+    std::chrono::steady_clock::now();
+double calculateSpeed(
+    unsigned long long bytes
 )
 {
-    std::cout
-        << "PROGRESS:"
-        << percent
-        << std::endl;
-}
+    auto now =
+        std::chrono::steady_clock::now();
 
-void emitSpeed(
-    double mbps
-)
-{
-    std::cout
-        << "SPEED:"
-        << mbps
-        << std::endl;
-}
+    double sec =
+        std::chrono::duration<double>(
+            now - startTime
+        ).count();
 
-void emitLog(
-    const char* msg
-)
-{
-    std::cout
-        << "LOG:"
-        << msg
-        << std::endl;
+    if (sec <= 0)
+        return 0;
+
+    return
+        (bytes / 1024.0 / 1024.0)
+        / sec;
 }
