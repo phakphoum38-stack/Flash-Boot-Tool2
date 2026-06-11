@@ -23,6 +23,12 @@ add_executable(
 
     engine/chunk_manager.cpp
     engine/flash_engine_v4.cpp
+
+    engine/dd_mode.cpp
+    engine/smart_mode.cpp
+    engine/etcher_mode.cpp
+    engine/ventoy_mode.cpp
+
     engine/progress.cpp
     engine/retry_engine.cpp
     engine/state_manager.cpp
