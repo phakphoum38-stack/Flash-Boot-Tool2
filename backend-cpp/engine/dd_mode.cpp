@@ -2,6 +2,7 @@
 
 #include "../disk/disk_open.h"
 #include "../disk/disk_write.h"
+#include "progress.h"
 
 #include <windows.h>
 #include <fstream>
