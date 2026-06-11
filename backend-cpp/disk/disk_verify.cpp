@@ -8,21 +8,24 @@ bool verifyChunk(
     DWORD size
 )
 {
-    BYTE* verify =
+    BYTE* verifyBuf =
         new BYTE[size];
 
-    DWORD read = 0;
+    DWORD readBytes = 0;
 
-    bool ok =
+    BOOL ok =
         ReadFile(
             h,
-            verify,
+            verifyBuf,
             size,
-            &read,
+            &readBytes,
             NULL
         );
 
-    delete[] verify;
+    delete[] verifyBuf;
 
-    return ok;
+    return (
+        ok &&
+        readBytes == size
+    );
 }
