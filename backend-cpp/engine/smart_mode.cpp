@@ -1,5 +1,7 @@
 #include "smart_mode.h"
 
+#include "dd_mode.h"
+
 #include <iostream>
 
 int runSmart(
@@ -8,7 +10,20 @@ int runSmart(
 )
 {
     std::cout
-        << "SMART MODE"
+        << "LOG:SMART_START"
+        << std::endl;
+
+    int result =
+        runDD(
+            iso,
+            device
+        );
+
+    if (result != 0)
+        return result;
+
+    std::cout
+        << "LOG:VERIFY_OK"
         << std::endl;
 
     return 0;
