@@ -1,5 +1,7 @@
 #include "etcher_mode.h"
 
+#include "dd_mode.h"
+
 #include <iostream>
 
 int runEtcher(
@@ -8,8 +10,11 @@ int runEtcher(
 )
 {
     std::cout
-        << "ETCHER MODE"
+        << "LOG:ETCHER_START"
         << std::endl;
 
-    return 0;
+    return runDD(
+        iso,
+        device
+    );
 }
