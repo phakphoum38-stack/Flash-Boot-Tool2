@@ -14,11 +14,26 @@ int runDD(
     uint64_t isoSize
 )
 {
-    std::cout << "LOG:DD_START" << std::endl;
+    std::cout
+        << "LOG:DD_START"
+        << std::endl;
+
+    std::cout
+        << "LOG:DEVICE="
+        << device
+        << std::endl;
+
+    std::cout
+        << "LOG:ISO="
+        << iso
+        << std::endl;
 
     if (isoSize == 0)
     {
-        std::cout << "LOG:INVALID_ISO_SIZE" << std::endl;
+        std::cout
+            << "LOG:INVALID_ISO_SIZE"
+            << std::endl;
+
         return 1;
     }
 
@@ -29,37 +44,59 @@ int runDD(
 
     if (!file)
     {
-        std::cout << "LOG:ISO_OPEN_FAIL" << std::endl;
+        std::cout
+            << "LOG:ISO_OPEN_FAIL"
+            << std::endl;
+
         return 1;
     }
 
-    HANDLE disk = CreateFileA(
-        device.c_str(),
-        GENERIC_WRITE,
-        FILE_SHARE_READ | FILE_SHARE_WRITE,
-        NULL,
-        OPEN_EXISTING,
-        0,
-        NULL
-    );
+    HANDLE disk =
+        CreateFileA(
+            device.c_str(),
+            GENERIC_WRITE,
+            FILE_SHARE_READ |
+            FILE_SHARE_WRITE,
+            NULL,
+            OPEN_EXISTING,
+            0,
+            NULL
+        );
 
     if (disk == INVALID_HANDLE_VALUE)
     {
-        std::cout << "LOG:DISK_OPEN_FAIL" << std::endl;
+        DWORD err =
+            GetLastError();
+
+        std::cout
+            << "LOG:DISK_OPEN_FAIL:"
+            << err
+            << std::endl;
+
         return 1;
     }
 
-    const DWORD CHUNK = 4 * 1024 * 1024;
+    std::cout
+        << "LOG:DISK_OPEN_OK"
+        << std::endl;
 
-    BYTE* buffer = new BYTE[CHUNK];
+    const DWORD CHUNK =
+        4 * 1024 * 1024;
+
+    BYTE* buffer =
+        new BYTE[CHUNK];
 
     unsigned long long total = 0;
 
     while (true)
     {
-        file.read(reinterpret_cast<char*>(buffer), CHUNK);
+        file.read(
+            reinterpret_cast<char*>(buffer),
+            CHUNK
+        );
 
-        std::streamsize bytesRead = file.gcount();
+        std::streamsize bytesRead =
+            file.gcount();
 
         if (bytesRead <= 0)
             break;
@@ -74,28 +111,50 @@ int runDD(
             NULL
         ))
         {
+            DWORD err =
+                GetLastError();
+
             delete[] buffer;
+
             CloseHandle(disk);
 
-            std::cout << "LOG:WRITE_FAIL" << std::endl;
+            std::cout
+                << "LOG:WRITE_FAIL:"
+                << err
+                << std::endl;
+
             return 1;
         }
 
         total += written;
 
         double percent =
-            (static_cast<double>(total) * 100.0) /
-            static_cast<double>(isoSize);
+            (
+                static_cast<double>(total)
+                * 100.0
+            ) /
+            static_cast<double>(
+                isoSize
+            );
 
-        emitProgress(percent);
+        emitProgress(
+            percent
+        );
     }
 
     delete[] buffer;
 
-    FlushFileBuffers(disk);
-    CloseHandle(disk);
+    FlushFileBuffers(
+        disk
+    );
 
-    std::cout << "LOG:DD_DONE" << std::endl;
+    CloseHandle(
+        disk
+    );
+
+    std::cout
+        << "LOG:DD_DONE"
+        << std::endl;
 
     return 0;
 }
